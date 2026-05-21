@@ -125,4 +125,127 @@ def test_parse_data_string_flags_loop_blocks():
     assert rows[0].values[0].kind == "loop_expr"
     assert rows[0].values[3].kind == "clock"
 
+def test_parse_data_string_malformed_row_recorded_but_kept():
+
+    text = "A B Y\n0 0 0\n0 1\n1 0 0\n"
+    headers, rows, has_loops = parse_data_string(text)
+    assert headers == ["A", "B", "Y"]
+    assert len(rows) == 3
+    assert rows[1].is_malformed and rows[1].values == []
+    assert not rows[0].is_malformed and not rows[2].is_malformed
+
+
+def test_parse_data_string_empty_input():
+    assert parse_data_string("") == ([], [], False)
+    assert parse_data_string("   \n  \n") == ([], [], False)
+    assert parse_data_string("# just a comment\n# another\n") == ([], [], False)
+
+
+def test_extract_test_specs_from_single_and():
+    c = parse_dig_file(str(SAMPLES_DIR / "tier1_minimal" / "single_and.dig"))
+    specs = extract_test_specs(c)
+    assert len(specs) == 1
+    spec = specs[0]
+    assert spec.headers == ["A", "B", "Y"]
+    assert spec.row_count() == 4
+    assert spec.well_formed_row_count() == 4
+    assert not spec.has_unexpanded_loops
+
+
+def test_extract_test_specs_falls_back_to_positional_name(tmp_path):
+    """A Testcase with no Label gets 'Testcase_{index}'."""
+    dig = tmp_path / "nolabel.dig"
+    dig.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<circuit><version>2</version><attributes/>'
+        '<visualElements>'
+        '<visualElement>'
+        '<elementName>Testcase</elementName>'
+        '<elementAttributes><entry>'
+        '<string>Testdata</string>'
+        '<testData><dataString>X Y\n0 0</dataString></testData>'
+        '</entry></elementAttributes>'
+        '<pos x="0" y="0"/>'
+        '</visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    c = parse_dig_file(str(dig))
+    specs = extract_test_specs(c)
+    assert len(specs) == 1
+    assert specs[0].name == "Testcase_0"
+
+
+def test_extract_test_specs_returns_empty_when_no_testcase(tmp_path):
+    dig = tmp_path / "no_tc.dig"
+    dig.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<circuit><version>2</version><attributes/>'
+        '<visualElements>'
+        '<visualElement><elementName>In</elementName>'
+        '<elementAttributes><entry>'
+        '<string>Label</string><string>A</string>'
+        '</entry></elementAttributes>'
+        '<pos x="0" y="0"/></visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    c = parse_dig_file(str(dig))
+    assert extract_test_specs(c) == []
+
+
+def test_extract_test_specs_empty_dataString_yields_empty_spec(tmp_path):
+    dig = tmp_path / "empty.dig"
+    dig.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<circuit><version>2</version><attributes/>'
+        '<visualElements>'
+        '<visualElement>'
+        '<elementName>Testcase</elementName>'
+        '<elementAttributes><entry>'
+        '<string>Testdata</string>'
+        '<testData><dataString></dataString></testData>'
+        '</entry></elementAttributes>'
+        '<pos x="0" y="0"/>'
+        '</visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    c = parse_dig_file(str(dig))
+    specs = extract_test_specs(c)
+    assert len(specs) == 1
+    assert specs[0].headers == []
+    assert specs[0].rows == []
+
+
+
+def test_match_variables_to_io_full_adder():
+    c = parse_dig_file(str(SAMPLES_DIR / "tier1_minimal" / "full_adder.dig"))
+    bindings = match_variables_to_io(["A", "B", "Cin", "Sum", "Cout"], c)
+    assert bindings["A"].role == "input" and bindings["A"].bit_width == 1
+    assert bindings["B"].role == "input"
+    assert bindings["Cin"].role == "input"
+    assert bindings["Sum"].role == "output"
+    assert bindings["Cout"].role == "output"
+
+
+def test_match_variables_marks_unbound_columns():
+    c = parse_dig_file(str(SAMPLES_DIR / "tier1_minimal" / "full_adder.dig"))
+    bindings = match_variables_to_io(["A", "B", "MysteryCol"], c)
+    assert bindings["MysteryCol"].role == "unbound"
+    assert bindings["MysteryCol"].component_index is None
+
+
+def test_match_variables_resolves_clock_column():
+    c = parse_dig_file(str(SAMPLES_DIR / "tier1_minimal" / "register_test.dig"))
+    clocks = [(i, comp) for i, comp in enumerate(c.components) if comp.element_name == "Clock"]
+    assert len(clocks) == 1
+    clock_label = clocks[0][1].label
+    if clock_label is None:
+        return
+    bindings = match_variables_to_io([clock_label], c)
+    assert bindings[clock_label].role == "clock"
+    assert bindings[clock_label].bit_width == 1
+
+def test_testcase_dataString_actually_extracted_for_spec():
+    c = parse_dig_file(str(SAMPLES_DIR / "tier1_minimal" / "single_and.dig"))
+    specs = extract_test_specs(c)
+    assert specs[0].raw_data_string.startswith("A B Y")
 
