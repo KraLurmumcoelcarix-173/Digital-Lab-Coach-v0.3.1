@@ -23,8 +23,9 @@ pass through a clocked element (Register, Clock, RAM, D-FlipFlop, ...)
 are NOT flagged. (Note to be modified when F8 is done)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from collections import Counter
+import json
 
 import networkx as nx
 
@@ -119,6 +120,15 @@ class CircuitFacts:
 
 
 # Helpers
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def to_json(self, *, indent: int | None = None) -> str:
+        """Return the bundle as a JSON string.
+        """
+        return json.dumps(self.to_dict(), indent=indent)
+
 
 def _component_bit_width(comp: Component) -> int | None:
     """The raw `Bits` attribute, or None when absent.
