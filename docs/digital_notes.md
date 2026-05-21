@@ -117,6 +117,7 @@ The net builder uses two-stage pin attachment:
 
 1. **Predicted-pin snap** (for known-geometry elements): for each (pin, endpoint) pair within `PIN_SNAP_TOLERANCE` (Manhattan distance ≤ 30), build all triples sorted by distance. Walk in sorted order and claim each pair only if neither side already claimed. Multiple pins at the *exact same coord* (distance 0) can share an endpoint.
 2. **Implicit-pin attach** (for no-geometry components, mostly subcircuit references): unclaimed degree-1 endpoints get assigned to the nearest no-geometry component within `IMPLICIT_PIN_RADIUS` (= 500). Per-instance cap = `child.inputs() + child.outputs()`; if more endpoints claim the instance than the cap allows, the farthest are dropped.
+3. **Co-located output rescue**: if a predicted output-direction pin doesn't snap to a wire endpoint but its exact coord is already part of a known net (most commonly because a Tunnel was placed directly on the pin with no connecting wire), the pin joins that net as a driver. This is how students wire Clock-through-tunnel in pipelined circuits, and applies to any output pin not just Clock.
 
 Dangling **outputs** are dropped from the netlist (they're not errors — just unused). Dangling **inputs** are kept as singleton nets so F5 can detect them as bugs.
 
