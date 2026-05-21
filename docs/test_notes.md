@@ -20,10 +20,16 @@ uv run pytest tests/test_netlist.py::test_buggy_multi_driver_flags_one_net_with_
 
 | File | Covers | # tests |
 |---|---|---:|
-| `tests/test_parser.py` | F1: parser, errors, subcircuit resolution | 25 |
-| `tests/test_pin_geometry.py` | F2: pin offset tables + rotation | 20 |
-| `tests/test_netlist.py` | F2: nets, buggy samples, subcircuit pin direction | 16 |
+| `tests/test_parser.py` | F1: parser, errors, subcircuit resolution | 21 |
+| `tests/test_pin_geometry.py` | F2: pin offset tables + rotation | 18 |
+| `tests/test_netlist.py` | F2: nets, buggy samples, subcircuit pin direction | 21 |
 | `tests/test_graph.py` | F2: signal-flow graph + reachability | 11 |
+| `tests/test_facts_splitter.py` | F3 Stage 1: splitter bit-range parser | 12 |
+| `tests/test_facts_widths.py` | F3 Stage 2: per-pin bit-width helpers | 27 |
+| `tests/test_facts_net_width.py` | F3 Stage 3: per-net width inference + conflicts | 9 |
+| `tests/test_facts_extractor.py` | F3 Stage 4: CircuitFacts bundle | 27 |
+| `tests/test_facts_serialization.py` | F3 Stage 5: `to_dict()` / `to_json()` JSON export | 19 |
+| **Total** | | **165** |
 
 ---
 
