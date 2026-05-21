@@ -394,7 +394,10 @@ def _cap_subcircuit_implicit_pins(circuit: Circuit, netlist: NetList) -> None:
         if inst_idx is None:
             continue
 
-        cap = len(child.inputs()) + len(child.outputs())
+        n_clock_children = sum(
+            1 for c in child.components if c.element_name == "Clock"
+        )
+        cap = len(child.inputs()) + len(child.outputs()) + n_clock_children
         anchor = circuit.components[inst_idx].position
         pins_with_net: list = []
         for net in netlist.nets:
