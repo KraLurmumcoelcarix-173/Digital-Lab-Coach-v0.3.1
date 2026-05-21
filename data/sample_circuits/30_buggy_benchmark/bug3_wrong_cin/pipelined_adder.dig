@@ -173,7 +173,7 @@
           </testData>
         </entry>
       </elementAttributes>
-      <pos x="620" y="100"/>
+      <pos x="620" y="80"/>
     </visualElement>
     <visualElement>
       <elementName>Const</elementName>
@@ -192,12 +192,7 @@
     </visualElement>
     <visualElement>
       <elementName>Const</elementName>
-      <elementAttributes>
-        <entry>
-          <string>Value</string>
-          <long>0</long>
-        </entry>
-      </elementAttributes>
+      <elementAttributes/>
       <pos x="620" y="360"/>
     </visualElement>
   </visualElements>
@@ -209,6 +204,10 @@
     <wire>
       <p1 x="600" y="320"/>
       <p2 x="640" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="700" y="320"/>
+      <p2 x="760" y="320"/>
     </wire>
     <wire>
       <p1 x="380" y="180"/>
@@ -223,7 +222,7 @@
       <p2 x="480" y="260"/>
     </wire>
     <wire>
-      <p1 x="780" y="260"/>
+      <p1 x="760" y="260"/>
       <p2 x="820" y="260"/>
     </wire>
     <wire>
@@ -233,10 +232,6 @@
     <wire>
       <p1 x="600" y="340"/>
       <p2 x="640" y="340"/>
-    </wire>
-    <wire>
-      <p1 x="700" y="340"/>
-      <p2 x="780" y="340"/>
     </wire>
     <wire>
       <p1 x="580" y="280"/>
@@ -287,8 +282,8 @@
       <p2 x="600" y="420"/>
     </wire>
     <wire>
-      <p1 x="780" y="260"/>
-      <p2 x="780" y="340"/>
+      <p1 x="760" y="260"/>
+      <p2 x="760" y="320"/>
     </wire>
   </wires>
   <measurementOrdering/>
