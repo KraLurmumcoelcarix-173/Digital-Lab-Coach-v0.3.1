@@ -6,7 +6,7 @@
 |---|---|:-:|
 | F1 | `.dig` parser | done |
 | F2 | Circuit netlist + signal-flow graph | done |
-| F3 | Structural fact extractor | ongoing |
+| F3 | Structural fact extractor | done |
 | F4 | Test-result parser | TBD |
 
 ## Tier 2 — Layer 1 deterministic checkers
@@ -40,6 +40,7 @@
 
 | # | Name | Status |
 |---|---|:-:|
+| F17 | UI design | TBD |
 | F17 | Ablation condition controller | TBD |
 | F18 | Telemetry logger | TBD |
 | F19 | Digital source-code dig (Path-3 plugin viability) | TBD |
