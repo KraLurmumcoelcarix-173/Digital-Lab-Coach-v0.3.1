@@ -50,6 +50,23 @@ export DIGITAL_JAR=/path_to_Digital/Digital.jar
 $env:DIGITAL_JAR = "C:\path_to_Digital\Digital.jar"
 ```
 
+## Developer setup
+
+If you're contributing to DLC:
+
+```bash
+# Install uv once (skip if already installed)
+# macOS / Linux:
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Windows PowerShell:
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Clone and run tests
+git clone <repo-url>
+cd digital-lab-coach
+uv run pytest      # creates .venv on first call
+```
+
 ## License
 
 GPL-3.0. See LICENSE.
