@@ -289,6 +289,9 @@ def _attach_pins_endpoint_first(
         elif spec.direction == "in" or spec.direction == "bidir":
             pin = _make_pin(c_idx, comp, spec, (px, py))
             _attach_pin(netlist, pin, (px, py), is_dangling=True)
+        elif spec.direction == "out" and (px, py) in netlist.by_coord:
+            pin = _make_pin(c_idx, comp, spec, (px, py))
+            _attach_pin(netlist, pin, (px, py), is_dangling=False)
     return claimed_endpoints
 
 
