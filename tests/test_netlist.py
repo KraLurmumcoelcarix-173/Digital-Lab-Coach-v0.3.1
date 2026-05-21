@@ -293,3 +293,37 @@ def test_two_pins_at_same_coord_share_net():
     pin_names = {(p.element_name, p.pin_name) for p in net_at_origin.pins}
     assert ("In", "out") in pin_names
     assert ("Register", "D") in pin_names
+
+# Output pin co-located with a Tunnel (no wire between them).
+
+def test_output_pin_at_tunnel_coord_joins_tunnel_net():
+    from dlc.parser.models import Circuit, Component, Position, Wire
+    c = Circuit(
+        format_version=2,
+        components=[
+            Component("Clock", Position(0, 0), {"Label": "Clk"}, label="Clk"),
+            Component("Tunnel", Position(0, 0), {"NetName": "clk"}),
+            Component("Tunnel", Position(100, 20), {"NetName": "clk"}),
+            Component("Register", Position(100, 0), {"Bits": 1}),
+        ],
+        wires=[],
+        source_path="synthetic",
+    )
+    nl = build_netlist(c)
+    clk_nets = [n for n in nl.nets if "clk" in n.tunnel_names]
+    assert len(clk_nets) == 1, "the two clk tunnels must merge into one net"
+    clk = clk_nets[0]
+    drivers = clk.drivers()
+    sinks = clk.sinks()
+    assert any(d.element_name == "Clock" for d in drivers), (
+        f"Clock should be a driver on the clk-tunnel net; "
+        f"drivers got: {[(d.element_name, d.pin_name) for d in drivers]}"
+    )
+    assert any(s.element_name == "Register" and s.pin_name == "C" for s in sinks), (
+        f"Register.C should be a sink on the clk-tunnel net; "
+        f"sinks got: {[(s.element_name, s.pin_name) for s in sinks]}"
+    )
+    assert len(drivers) >= 1, (
+        "the merged clk-tunnel net must have at least one driver "
+        "(Clock) after the fix"
+    )
