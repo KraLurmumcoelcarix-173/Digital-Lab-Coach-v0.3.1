@@ -54,6 +54,8 @@ $env:DIGITAL_JAR = "C:\path_to_Digital\Digital.jar"
 
 If you're contributing to DLC:
 
+Need Python version >=3.12, 3.12 would be the best for developing
+
 ```bash
 # Install uv once (skip if already installed)
 # macOS / Linux:
@@ -67,6 +69,11 @@ cd digital-lab-coach
 uv run pytest      # creates .venv on first call
 ```
 
+> **Students:** same setup applies until we ship a packaged release.
+> Install `uv`, clone, and `uv run` whatever entry point we land for
+> the student CLI/GUI. The first run pops up the Digital.jar file
+> picker; 
+
 ## License
 
 GPL-3.0. See LICENSE.
@@ -75,3 +82,4 @@ GPL-3.0. See LICENSE.
 
 Built to read .dig files produced by [Digital](https://github.com/hneemann/Digital),
 an open-source educational circuit simulator (GPL-3.0).
+
