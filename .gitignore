@@ -1,8 +1,13 @@
-# Python
+# Python & Tests caches
 __pycache__/
+*.py[cod]
 *.pyc
 .venv/
+venv/
 .pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
 .ruff_cache/
 *.egg-info/
 
@@ -25,6 +30,7 @@ ta_archive/
 .idea/
 *.swp
 .DS_Store
+Thumbs.db
 
 # Build artifacts
 dist/
