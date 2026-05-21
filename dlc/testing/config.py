@@ -15,12 +15,12 @@ def _config_file() -> Path:
 
 
 def load_config() -> dict:
-    p = _config_file()
-    if not p.exists():
-        return {}
     try:
+        p = _config_file()
+        if not p.exists():
+            return {}
         return json.loads(p.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, RuntimeError):
         return {}
 
 

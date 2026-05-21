@@ -90,8 +90,8 @@ def test_prompt_for_jar_path_saves_when_user_picks_file(tmp_path):
                    return_value=str(fake_jar)):
             with patch("tkinter.Tk"):
                 result = prompt_for_jar_path()
-    assert result == str(fake_jar)
-    assert get_configured_jar() == str(fake_jar)
+        assert result == str(fake_jar)
+        assert get_configured_jar() == str(fake_jar)
 
 
 def test_prompt_for_jar_path_handles_headless_environment(tmp_path):
