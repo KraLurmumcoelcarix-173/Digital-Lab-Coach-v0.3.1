@@ -91,6 +91,24 @@ def test_lines_with_colons_but_not_results_are_ignored():
     res = parse_cli_output(text)
     assert res.testcases == []
 
+def test_result_line_with_extra_text_before_word_name():
+    text = "lab5 zip Running basic test ... cpu: passed\n"
+    res = parse_cli_output(text)
+    assert len(res.testcases) == 1
+    assert res.testcases[0].name == "cpu"
+
+def test_passed_true_when_all_passed_and_nonempty():
+    res = parse_cli_output("a: passed\nb: passed\n")
+    assert res.passed() is True
+
+def test_passed_false_when_any_failed():
+    res = parse_cli_output("a: passed\nb: failed (20%)\n")
+    assert res.passed() is False
+
+def test_passed_false_on_empty_results():
+    assert parse_cli_output("").passed() is False
+    assert parse_cli_output("some other text\n").passed() is False
+
 # Helpers
 
 def test_by_name_returns_dict_keyed_by_testcase_name():
