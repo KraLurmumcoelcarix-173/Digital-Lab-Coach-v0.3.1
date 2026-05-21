@@ -300,3 +300,60 @@ def test_ambiguous_subcircuit_flagged_but_resolved(tmp_path):
     assert sub.resolution_error is not None
     assert "ambiguous" in sub.resolution_error.lower()
     assert "deeper" not in sub.resolved_path.replace("\\", "/")
+
+
+# Testcase dataString extraction 
+
+def test_testcase_dataString_extracted_into_attribute():
+    c = _load("single_and.dig")
+    tc = next(comp for comp in c.components if comp.element_name == "Testcase")
+    raw = tc.attributes.get("Testdata")
+    assert isinstance(raw, str)
+    assert raw.startswith("A B Y")
+    assert "1 1 1" in raw
+    lines = [line for line in raw.strip().splitlines() if line.strip()]
+    assert len(lines) == 5  
+
+def test_testcase_with_clock_token_captured(tmp_path):
+    dig = tmp_path / "tc.dig"
+    dig.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<circuit><version>2</version><attributes/>'
+        '<visualElements>'
+        '<visualElement>'
+        '<elementName>Testcase</elementName>'
+        '<elementAttributes><entry>'
+        '<string>Testdata</string>'
+        '<testData><dataString>A B Clk Sum\n0 0 C 0\n3 4 C 7</dataString></testData>'
+        '</entry></elementAttributes>'
+        '<pos x="0" y="0"/>'
+        '</visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    c = parse_dig_file(str(dig))
+    tc = next(comp for comp in c.components if comp.element_name == "Testcase")
+    raw = tc.attributes.get("Testdata")
+    assert "A B Clk Sum" in raw
+    assert "C" in raw
+    assert "3 4 C 7" in raw
+
+
+def test_empty_testcase_dataString_is_empty_string(tmp_path):
+    dig = tmp_path / "empty_tc.dig"
+    dig.write_text(
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<circuit><version>2</version><attributes/>'
+        '<visualElements>'
+        '<visualElement>'
+        '<elementName>Testcase</elementName>'
+        '<elementAttributes><entry>'
+        '<string>Testdata</string>'
+        '<testData><dataString></dataString></testData>'
+        '</entry></elementAttributes>'
+        '<pos x="0" y="0"/>'
+        '</visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    c = parse_dig_file(str(dig))
+    tc = next(comp for comp in c.components if comp.element_name == "Testcase")
+    assert tc.attributes.get("Testdata") == ""
