@@ -17,6 +17,7 @@ Output:
     - per-component topology (predecessors, successors)
     - bug facts (dangling_input, multi_driver, combinational_cycle,
       width_conflict, missing_subcircuit)
+    - to_dict() / to_json() for JSON-safe export to the LLM layer.
 
 Combinational cycles are filtered to "purely combinational": cycles that
 pass through a clocked element (Register, Clock, RAM, D-FlipFlop, ...)
