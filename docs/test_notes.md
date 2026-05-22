@@ -393,7 +393,7 @@ for r in per_row:
 "
 ```
 
-Wallclock: roughly N × JVM-startup. 
+Wallclock: roughly N × JVM-startup. Takes minutes for files with more than 100 tests.
 
 #### When to use which
 
