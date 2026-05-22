@@ -374,7 +374,7 @@ from dlc.parser.dig_parser import parse_dig_file
 from dlc.testing.spec import extract_test_specs
 from dlc.testing.runner import per_row_run, find_digital_jar
 
-TARGET_DIG = 'data/sample_circuits/tier3_realistic/cpu.dig'  # your .dig
+TARGET_DIG = 'data/sample_circuits/tier3_realistic/alu.dig'  # your .dig
 
 circuit = parse_dig_file(TARGET_DIG)
 spec = extract_test_specs(circuit)[0]
@@ -393,7 +393,7 @@ for r in per_row:
 "
 ```
 
-Wallclock: roughly N × JVM-startup. Takes minutes for files with more than 100 tests.
+Wallclock: roughly N × JVM-startup, roughly N seconds. Takes minutes for files with more than 100 tests.
 
 #### When to use which
 
