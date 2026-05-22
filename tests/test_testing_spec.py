@@ -319,3 +319,11 @@ def test_testcase_dataString_actually_extracted_for_spec():
     specs = extract_test_specs(c)
     assert specs[0].raw_data_string.startswith("A B Y")
 
+def test_loop_expansion_wraps_negative_results_in_parens():
+    text = "A\nloop(N, 3)\n(N-60)\nend loop\n"
+    _, rows, _ = parse_data_string(text)
+    assert [r.values[0].value for r in rows] == [-60, -59, -58]
+    assert rows[0].raw == "(-60)"
+    assert rows[1].raw == "(-59)"
+    assert rows[2].raw == "(-58)"
+

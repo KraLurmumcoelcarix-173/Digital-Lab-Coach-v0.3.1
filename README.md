@@ -71,7 +71,7 @@ uv run pytest      # creates .venv on first call
 
 > **Students:** same setup applies until we ship a packaged release.
 > Install `uv`, clone, and `uv run` whatever entry point we land for
-> the student CLI/GUI. The first run pops up the Digital.jar file
+> the student CLI/GUI later. The first run pops up the Digital.jar file
 > picker; 
 
 ## License

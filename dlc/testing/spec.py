@@ -123,7 +123,7 @@ def _expand_loop_line(line: str, var: str, n: int) -> str:
             val = n - int(num)
         else:
             return m.group(0)
-        return str(val)
+        return f'({val})' if val < 0 else str(val)
     return pattern.sub(repl, line)
 
 def _is_loop_marker(line: str) -> bool:
