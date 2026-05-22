@@ -1,5 +1,5 @@
 """
-DLC user-level configuration
+DLC user-level configuration for jar location
 """
 
 import json

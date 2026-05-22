@@ -7,6 +7,7 @@ from dlc.parser.netlist import NetList
 def build_signal_graph(circuit: Circuit, netlist: NetList) -> nx.MultiDiGraph:
     """
     Build the directed signal-flow graph for `circuit` given its `netlist`.
+    turns NetList into a networkx.MultiDiGraph (nodes = components, edges = driver→sink with net_id + pin attribution).
     """
     g = nx.MultiDiGraph()
     for idx, comp in enumerate(circuit.components):

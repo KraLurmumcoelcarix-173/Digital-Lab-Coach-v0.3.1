@@ -41,8 +41,8 @@
 | # | Name | Status |
 |---|---|:-:|
 | F17 | UI design | TBD |
-| F17 | Ablation condition controller | TBD |
-| F18 | Telemetry logger | TBD |
-| F19 | Digital source-code dig (Path-3 plugin viability) | TBD |
-| F20 | Evaluation harness (30-bug benchmark, rubric scoring) | TBD |
-| F21 | CLI interface | TBD |
+| F18 | Ablation condition controller | TBD |
+| F19 | Telemetry logger | TBD |
+| F20 | Digital source-code dig (Path-3 plugin viability) | TBD |
+| F21 | Evaluation harness (30-bug benchmark, rubric scoring) | TBD |
+| F22 | CLI interface | TBD |

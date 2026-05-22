@@ -26,7 +26,6 @@ class PinSpec:
     offset_y: int
     direction: str  
 
-# Single-input gate (Not). (Not Verified for all cases yet)
 _NOT_PINS = [
     PinSpec("A", offset_x=0,  offset_y=0, direction="in"),
     PinSpec("Y", offset_x=40, offset_y=0, direction="out"),
@@ -139,6 +138,7 @@ def _nary_gate_pins(comp: Component) -> list[PinSpec]:
 def _multiplexer_pins(comp: Component) -> list[PinSpec]:
     """
     Multiplexer. 'Selector Bits' = N → 2^N data inputs (absent = 1 → 2-to-1).
+    2-input Mux uses spacing 40 with sel at (20, 40), 4+ input uses spacing 20.
 
       n_inputs == 2 (sel_bits=1):
         in_i at (0, i * 40)   
@@ -280,6 +280,9 @@ DYNAMIC_PIN_TABLE: dict[str, callable] = {
 # Public API
 
 def get_pin_specs(component: Component) -> list[PinSpec]:
+    """
+    public look up, use static table for static pins, dynamic table for dynamic pins look up
+    """
     name = component.element_name
 
     if name in STATIC_PIN_TABLE:
