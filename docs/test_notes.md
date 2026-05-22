@@ -410,45 +410,12 @@ Wallclock: roughly N × JVM-startup, roughly N seconds. Takes minutes for files 
 
 | Test | If it fails… | File |
 |---|---|---|
-| `test_rotation_attribute_parses_as_integer` | We're reading `<rotation rotation="N"/>` as the string `"rotation"` again instead of int N. | `tests/test_parser.py` |
 | `test_subfolder_reference_resolves` | Recursive subcircuit search broke; references in `subs/` folders won't load. | `tests/test_parser.py` |
 | `test_ambiguous_subcircuit_flagged_but_resolved` | Two files with the same name no longer flagged; parent parse may silently pick the wrong one. | `tests/test_parser.py` |
 | `test_missing_subcircuit_recorded_not_crashed` | A missing subcircuit file now crashes the parser instead of attaching a `resolution_error`. | `tests/test_parser.py` |
 | `test_testcase_dataString_extracted_into_attribute` | F4 will break — we're back to capturing whitespace instead of the real test rows. | `tests/test_parser.py` |
 | `test_testcase_with_clock_token_captured` | Clock pulse `C` token is being eaten somewhere on the way from XML to attribute. | `tests/test_parser.py` |
 
-#### Function 2 — Netlist + graph
-
-| Test | If it fails… | File |
-|---|---|---|
-| `test_multiplexer_2input_uses_spacing_40` | Mux 2-input geometry regressed (in0/in1 spacing 40, sel at (20,40)). | `tests/test_pin_geometry.py` |
-| `test_multiplexer_4input_uses_spacing_20` | Mux 4+-input layout regressed (different spacing rule from 2-input). | `tests/test_pin_geometry.py` |
-| `test_comparator_outputs_at_x60_not_x80` | Comparator output column moved back to x=80 — wires won't snap to outputs. | `tests/test_pin_geometry.py` |
-| `test_rotation_applies_to_component` | Rotation math is off; rotated Muxes / Splitters won't have correct pin coords. | `tests/test_pin_geometry.py` |
-| `test_tier1_minimal_all_clean` | At least one clean tier-1 sample now reports a phantom undriven or multi-driver net. | `tests/test_netlist.py` |
-| `test_buggy_dangling_input_flags_one_undriven_singleton` | The "dangling And.in1" pattern isn't detected as a single undriven sink anymore. | `tests/test_netlist.py` |
-| `test_buggy_multi_driver_flags_one_net_with_two_drivers` | Two `In` components driving the same net no longer surface as multi-driver. | `tests/test_netlist.py` |
-| `test_buggy_combinational_loop_keeps_signal_path` | Combinational ring breaks the netlist build (should build, F8 detects). | `tests/test_netlist.py` |
-| `test_buggy_width_mismatch_netlist_is_structurally_clean` | F2 started flagging width mismatch (that's F6's job; F2 should stay silent). | `tests/test_netlist.py` |
-| `test_two_pins_at_same_coord_share_net` | Decoder.sel + Mux.in0 (same coord) no longer share a net. | `tests/test_netlist.py` |
-| `test_subcircuit_implicit_pin_count_capped_to_child_ports` | Subcircuit instance gets too many or too few implicit pins (the ReadData2-drop bug). | `tests/test_netlist.py` |
-| `test_output_pin_at_tunnel_coord_joins_tunnel_net` | Clock-on-Tunnel (no wire) regression — Clock would be dropped, Register C pins shown as dangling. | `tests/test_netlist.py` |
-| `test_tier3_calculator_full_io_reachability` | The 16 input→output pairs on tier3_calculator no longer all connect. | `tests/test_netlist.py` |
-| `test_tier1_minimal_full_reachability` / `test_tier2_subcircuits_full_reachability` / `test_tier3_calculator_full_reachability` | Sweep invariant broken — some sample circuit lost end-to-end signal flow. | `tests/test_graph.py` |
-
-#### Function 3 — Structural facts
-
-| Test | If it fails… | File |
-|---|---|---|
-| `test_dangling_input_appears_in_bug_list` | F3 bug list lost the dangling_input category. | `tests/test_facts_extractor.py` |
-| `test_multi_driver_appears_in_bug_list` | F3 bug list lost the multi_driver category. | `tests/test_facts_extractor.py` |
-| `test_combinational_cycle_appears_in_bug_list` | F3 bug list lost combinational_cycle. | `tests/test_facts_extractor.py` |
-| `test_clocked_feedback_does_not_fire_combinational_cycle` | Register feedback regressed into a false positive — every clocked circuit looks broken. | `tests/test_facts_extractor.py` |
-| `test_missing_subcircuit_appears_in_bug_list` | Missing-subcircuit errors no longer surface in F3 bugs. | `tests/test_facts_extractor.py` |
-| `test_width_conflict_reported_when_two_drivers_differ` | Driver-vs-driver width disagreement no longer flagged. | `tests/test_facts_extractor.py` |
-| `test_no_bugs_for_clean_tier3_calculator` | F3 inventing false bugs on the canonical clean tier-3. | `tests/test_facts_extractor.py` |
-| `test_to_json_round_trips_canonical_layer3_only_bug_case` | bug1 (Mux.in3-to-Ground) JSON serialization regressed — the L3-only research case can't be packaged. | `tests/test_facts_serialization.py` |
-| `test_every_sample_circuit_serializes_without_error` | At least one `.dig` in the sample set now fails to_json (sweep invariant). | `tests/test_facts_serialization.py` |
 
 #### Function 4 — Test extractor + runner
 
@@ -459,7 +426,6 @@ Wallclock: roughly N × JVM-startup, roughly N seconds. Takes minutes for files 
 | `test_parse_data_string_skips_comment_only_lines_and_blanks` | alu.dig's section headers and blank lines break the row count. | `tests/test_testing_spec.py` |
 | `test_parse_data_string_expands_loop_blocks` | `loop(N, 30) … end loop` no longer expands; register-file's 93 rows collapse. | `tests/test_testing_spec.py` |
 | `test_loop_expansion_wraps_negative_results_in_parens` | Negative loop-expansion outputs back to bare `-60`; Digital rejects them and per-row hits "saw: \<none\>". | `tests/test_testing_spec.py` |
-| `test_register_file_full_dataString_expands_to_93_rows` | The full register-file flow stops landing at 93 rows. | `tests/test_testing_spec.py` |
 | `test_parse_handles_java_log_noise_around_result` | Autograder Java logger noise around `cpu: passed` is no longer tolerated. | `tests/test_testing_results.py` |
 | `test_lines_with_colons_but_not_results_are_ignored` | `INFO: Created user preferences directory.` gets misread as a testcase result. | `tests/test_testing_results.py` |
 | `test_join_with_matching_cli_result` | TestSpec × TestRunResults join broken — L3 can't get its single-shape input. | `tests/test_testing_run.py` |
