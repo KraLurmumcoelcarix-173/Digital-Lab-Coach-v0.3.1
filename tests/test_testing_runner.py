@@ -237,3 +237,84 @@ def test_safe_unlink_queues_pending_on_persistent_failure(tmp_path):
         _safe_unlink(fake_path)
     assert fake_path in _PENDING_CLEANUP
     _PENDING_CLEANUP.clear()
+
+def test_per_row_run_cumulative_all_pass(tmp_path):
+    src = tmp_path / "x.dig"
+    src.write_text(
+        '<circuit><version>2</version><visualElements>'
+        '<visualElement><elementName>Testcase</elementName>'
+        '<elementAttributes><entry><string>Testdata</string>'
+        '<testData><dataString>A\n0\n1\n2</dataString></testData>'
+        '</entry></elementAttributes><pos x="0" y="0"/></visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    spec = _spec_with_rows("t", ["0", "1", "2"])
+    with patch("dlc.testing.runner.run_digital_cli",
+               return_value=(0, "t: passed\n")) as mock_run:
+        with patch("dlc.testing.runner.find_digital_jar",
+                   return_value="/fake/Digital.jar"):
+            results = per_row_run(spec, str(src))
+    assert mock_run.call_count == 3
+    assert [r.status for r in results] == ["passed", "passed", "passed"]
+
+
+def test_per_row_run_cumulative_isolates_failing_row(tmp_path):
+    src = tmp_path / "x.dig"
+    src.write_text(
+        '<circuit><version>2</version><visualElements>'
+        '<visualElement><elementName>Testcase</elementName>'
+        '<elementAttributes><entry><string>Testdata</string>'
+        '<testData><dataString>A\n0\n1\n2</dataString></testData>'
+        '</entry></elementAttributes><pos x="0" y="0"/></visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    spec = _spec_with_rows("t", ["0", "1", "2"])
+    outputs = iter([
+        (0, "t: passed\n"),
+        (0, "t: failed (50%)\n"),
+        (0, "t: failed (33%)\n"),
+    ])
+    with patch("dlc.testing.runner.run_digital_cli",
+               side_effect=lambda *a, **kw: next(outputs)):
+        with patch("dlc.testing.runner.find_digital_jar",
+                   return_value="/fake/Digital.jar"):
+            results = per_row_run(spec, str(src))
+    assert [r.status for r in results] == ["passed", "failed", "passed"]
+
+
+def test_per_row_run_cumulative_detects_multiple_failures(tmp_path):
+    src = tmp_path / "x.dig"
+    src.write_text(
+        '<circuit><version>2</version><visualElements>'
+        '<visualElement><elementName>Testcase</elementName>'
+        '<elementAttributes><entry><string>Testdata</string>'
+        '<testData><dataString>A\n' + "\n".join(str(i) for i in range(12)) +
+        '</dataString></testData></entry></elementAttributes>'
+        '<pos x="0" y="0"/></visualElement>'
+        '</visualElements><wires/></circuit>'
+    )
+    spec = _spec_with_rows("t", [str(i) for i in range(12)])
+
+    def mk_output(call_idx):
+        total = call_idx + 1
+        if call_idx < 6:
+            return (0, "t: passed\n")
+        if call_idx < 11:
+            pct = round(100 * 1 / total)
+            return (0, f"t: failed ({pct}%)\n")
+        pct = round(100 * 2 / total)
+        return (0, f"t: failed ({pct}%)\n")
+
+    call_counter = {"i": 0}
+    def fake_run(*a, **kw):
+        out = mk_output(call_counter["i"])
+        call_counter["i"] += 1
+        return out
+
+    with patch("dlc.testing.runner.run_digital_cli", side_effect=fake_run):
+        with patch("dlc.testing.runner.find_digital_jar",
+                   return_value="/fake/Digital.jar"):
+            results = per_row_run(spec, str(src))
+
+    expected = ["passed"]*6 + ["failed"] + ["passed"]*4 + ["failed"]
+    assert [r.status for r in results] == expected
