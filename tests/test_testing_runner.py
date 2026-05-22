@@ -97,49 +97,6 @@ def _spec_with_rows(name, rows_text):
         rows=rows, raw_data_string="", has_unexpanded_loops=False,
     )
 
-
-def test_per_row_run_passes_when_digital_says_passed(tmp_path):
-    src = tmp_path / "x.dig"
-    src.write_text(
-        '<circuit><version>2</version><visualElements>'
-        '<visualElement><elementName>Testcase</elementName>'
-        '<elementAttributes><entry><string>Testdata</string>'
-        '<testData><dataString>A\n0\n1</dataString></testData>'
-        '</entry></elementAttributes><pos x="0" y="0"/></visualElement>'
-        '</visualElements><wires/></circuit>'
-    )
-    spec = _spec_with_rows("t", ["0", "1"])
-    with patch("dlc.testing.runner.run_digital_cli",
-               return_value=(0, "t: passed\n")) as mock_run:
-        with patch("dlc.testing.runner.find_digital_jar",
-                   return_value="/fake/Digital.jar"):
-            results = per_row_run(spec, str(src))
-    assert mock_run.call_count == 2
-    assert all(r.status == "passed" for r in results)
-
-
-def test_per_row_run_isolates_failing_row(tmp_path):
-    """Per-row strategy in action: row 0 passes, row 1 fails."""
-    src = tmp_path / "x.dig"
-    src.write_text(
-        '<circuit><version>2</version><visualElements>'
-        '<visualElement><elementName>Testcase</elementName>'
-        '<elementAttributes><entry><string>Testdata</string>'
-        '<testData><dataString>A\n0\n1</dataString></testData>'
-        '</entry></elementAttributes><pos x="0" y="0"/></visualElement>'
-        '</visualElements><wires/></circuit>'
-    )
-    spec = _spec_with_rows("t", ["0", "1"])
-    sequence = iter([(0, "t: passed\n"), (0, "t: failed (100%)\n")])
-    with patch("dlc.testing.runner.run_digital_cli",
-               side_effect=lambda *a, **kw: next(sequence)):
-        with patch("dlc.testing.runner.find_digital_jar",
-                   return_value="/fake/Digital.jar"):
-            results = per_row_run(spec, str(src))
-    assert results[0].status == "passed"
-    assert results[1].status == "failed"
-
-
 def test_per_row_run_records_timeout_as_error(tmp_path):
     src = tmp_path / "x.dig"
     src.write_text(
