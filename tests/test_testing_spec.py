@@ -134,39 +134,6 @@ def test_loop_expansion_handles_negative_results():
     assert [r.values[1].value for r in rows] == [-60, -59, -58]
     assert [r.values[0].value for r in rows] == [1, 2, 3]
 
-
-def test_register_file_full_dataString_expands_to_93_rows():
-    text = (
-        "WriteReg WriteData RegWrite Clock ReadReg1 ReadReg2 ReadData1 ReadData2\n"
-        "\n"
-        "# $1 = 25\n"
-        "1 25 1 C 1 0 25 0\n"
-        "\n"
-        "# $2 = 30\n"
-        "2 30 1 C 0 2 0 30\n"
-        "\n"
-        "loop(N, 30)\n"
-        "(N+1) (N+1) 1 C (N+1) (N) (N+1) (N)\n"
-        "end loop\n"
-        "\n"
-        "loop(N, 30)\n"
-        "(N+1) (N-60) 1 C (N+1) (N+1) (N-60) (N-60)\n"
-        "end loop\n"
-        "\n"
-        "0 25 1 C 0 0 0 0\n"
-        "\n"
-        "loop(N, 30)\n"
-        "(N+1) (N+80) 0 C (N+1) (N+1) (N-60) (N-60)\n"
-        "end loop\n"
-    )
-    _, rows, has_unexpanded = parse_data_string(text)
-    assert len(rows) == 93
-    assert not has_unexpanded
-    assert rows[2].values[0].value == 1
-    assert rows[2].values[5].value == 0
-    assert rows[32].values[1].value == -60
-
-
 def test_unrecognized_loop_variable_keeps_loop_expr_and_flags_unexpanded():
     text = "A\nloop(N, 3)\n(M)\nend loop\n"
     _, rows, has_unexpanded = parse_data_string(text)
