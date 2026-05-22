@@ -157,14 +157,14 @@ def per_row_run(
     jar_path: str | None = None,
     timeout: float = 30.0,
 ) -> list[PerRowResult]:
-
+    """Run Digital cumulatively to give per-row pass/fail with correct
+    semantics for stateful circuits."""
     if jar_path is None:
         jar_path = find_digital_jar()
     if jar_path is None:
         msg = (
-            "Digital.jar not found. Set the DIGITAL_JAR env var to your "
-            "Digital.jar path (download from "
-            "https://github.com/hneemann/Digital/releases)."
+            "Digital.jar not found. Set the DIGITAL_JAR env var or save "
+            "the path via dlc.testing.config.set_digital_jar_path()."
         )
         return [
             PerRowResult(
@@ -175,6 +175,9 @@ def per_row_run(
         ]
 
     results: list[PerRowResult] = []
+    prev_fail_count = 0
+    runnable_so_far: list[str] = []  
+
     for row in spec.rows:
         if row.is_malformed:
             results.append(PerRowResult(
@@ -190,8 +193,10 @@ def per_row_run(
             ))
             continue
 
+        runnable_so_far.append(row.raw)
+        prefix_text = "\n".join(runnable_so_far)
         temp_path = _write_single_row_dig(
-            original_dig_path, spec.headers, row.raw,
+            original_dig_path, spec.headers, prefix_text,
         )
         try:
             code, output = run_digital_cli(temp_path, jar_path, timeout=timeout)
@@ -201,6 +206,7 @@ def per_row_run(
                     status="error", error_message="Digital CLI timed out",
                     raw_output=output,
                 ))
+                prev_fail_count = 0
                 continue
             if code == -2:
                 results.append(PerRowResult(
@@ -208,13 +214,16 @@ def per_row_run(
                     status="error", error_message="java not on PATH",
                     raw_output=output,
                 ))
+                prev_fail_count = 0
                 continue
             if code < 0:
                 results.append(PerRowResult(
                     spec_name=spec.name, row_index=row.line_index,
                     status="error", error_message=output,
                 ))
+                prev_fail_count = 0
                 continue
+
             run = parse_cli_output(output)
             tc = run.by_name().get(spec.name)
             if tc is None and len(run.testcases) == 1:
@@ -230,15 +239,24 @@ def per_row_run(
                     ),
                     raw_output=output,
                 ))
+                continue
+
+            total = len(runnable_so_far)
+            if tc.status == "passed":
+                cur_fail_count = 0
             else:
-                results.append(PerRowResult(
-                    spec_name=spec.name, row_index=row.line_index,
-                    status=tc.status, raw_output=output,
-                ))
+                pct = tc.fail_pct or 0
+                cur_fail_count = round(total * pct / 100)
+
+            row_status = "failed" if cur_fail_count > prev_fail_count else "passed"
+            results.append(PerRowResult(
+                spec_name=spec.name, row_index=row.line_index,
+                status=row_status, raw_output=output,
+            ))
+            prev_fail_count = cur_fail_count
         finally:
             _safe_unlink(temp_path)
     return results
-
 
 def attach_per_row_results(
     test_runs: list,           
