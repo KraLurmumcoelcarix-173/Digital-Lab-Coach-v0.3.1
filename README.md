@@ -61,18 +61,16 @@ cd digital-lab-coach
 uv run pytest      # creates .venv on first call
 ```
 
-**Windows quirks**
+**Side notes**
 
-```markdown
-> - The shell installer only updates the shell it's run from. If you
+>   The shell installer only updates the shell it's run from. If you
 >   install `uv` via Git Bash but want to use it from PowerShell, run
 >   the PowerShell installer too.
->
-> - After install, **close and reopen** your terminal (restart VS Code
+
+>   After install, **close and reopen** your terminal (restart VS Code
 >   if it still can't find `uv`.)
->
-> - In Git Bash, prefer forward slashes (`C:/Users/...`)
-```
+
+>   In Git Bash, prefer forward slashes (`C:/Users/...`)
 
 >   PowerShell doesn't always parse multi-line `python -c "..."` blocks
 >   cleanly. For the `test_notes.md` manual tests, use Git Bash, or save
