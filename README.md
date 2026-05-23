@@ -72,6 +72,7 @@ uv run pytest      # creates .venv on first call
 >   if it still can't find `uv`.)
 >
 > - In Git Bash, prefer forward slashes (`C:/Users/...`)
+```
 
 >   PowerShell doesn't always parse multi-line `python -c "..."` blocks
 >   cleanly. For the `test_notes.md` manual tests, use Git Bash, or save
