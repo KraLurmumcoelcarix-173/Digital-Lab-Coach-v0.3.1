@@ -26,7 +26,7 @@ Active development.
 | `docs/` | Architecture notes, design decisions, dev log, dev debug guide. 
 | `tests/` | pytest unit tests, one file per source module. 
 
-## Developer setup
+## Developer setup (For best experience, run the set up and testing flow using bash)
 
 If you're contributing to DLC:
 
