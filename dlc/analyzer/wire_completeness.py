@@ -88,12 +88,23 @@ def _pin_descr(circuit: Circuit, pin_dict: dict) -> str:
     return f"{_component_display_name(comp, idx)}.{pin_dict['pin_name']}"
 
 
-def _check_dangling_inputs(circuit: Circuit, facts: CircuitFacts) -> list[Issue]:
+def _check_dangling_inputs(
+    circuit: Circuit, facts: CircuitFacts, netlist: NetList
+) -> list[Issue]:
+    isolated = _component_isolated_indices(circuit, netlist)
     out: list[Issue] = []
     for bug in facts.bugs:
         if bug.kind != "dangling_input":
             continue
-        pins = bug.detail.get("pins", []) or []
+        raw = bug.detail.get("pins", []) or []
+        pins = []
+        for p in raw:
+            idx = p["component_index"]
+            if circuit.components[idx].is_output():
+                continue
+            if idx in isolated:
+                continue
+            pins.append(p)
         if not pins:
             continue
         descs = [_pin_descr(circuit, p) for p in pins]
@@ -108,11 +119,11 @@ def _check_dangling_inputs(circuit: Circuit, facts: CircuitFacts) -> list[Issue]
                 f"have no wire connecting them. The circuit will produce "
                 f"an undefined value at this point."
             ),
-            component_indices=bug.component_indices,
+            component_indices=[p["component_index"] for p in pins],
             location=loc,
             suggested_fix=(
-                f"Connect a driving output (a gate output, a Const, or an "
-                f"In pin) to {descs[0]}."
+                f"Connect a driving output (a gate output, a Const, or "
+                f"an In pin) to {descs[0]}."
             ),
         ))
     return out
@@ -244,7 +255,6 @@ def _check_unused_top_outputs(
 def _check_isolated_components(
     circuit: Circuit, netlist: NetList
 ) -> list[Issue]:
-    """Components whose every attached pin sits in a singleton net."""
     out: list[Issue] = []
     for idx in sorted(_component_isolated_indices(circuit, netlist)):
         comp = circuit.components[idx]
@@ -271,7 +281,6 @@ def _check_isolated_components(
 def _check_empty_tunnels(
     circuit: Circuit, netlist: NetList
 ) -> list[Issue]:
-    """Tunnel-only nets — named connection points with no actual signal."""
     out: list[Issue] = []
     for net in netlist.nets:
         if not net.tunnel_names:
@@ -337,7 +346,10 @@ def check_wire_completeness(
         facts = extract_facts(circuit, netlist=netlist, graph=graph)
 
     issues = IssueCollection()
-    issues.extend(_check_dangling_inputs(circuit, facts))
+    issues.extend(_check_dangling_inputs(circuit, facts, netlist))
     issues.extend(_check_multi_drivers(circuit, facts))
     issues.extend(_check_missing_subcircuit(circuit, facts))
+    issues.extend(_check_unused_top_outputs(circuit, facts))
+    issues.extend(_check_isolated_components(circuit, netlist))
+    issues.extend(_check_empty_tunnels(circuit, netlist))
     return issues
