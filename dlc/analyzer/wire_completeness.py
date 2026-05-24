@@ -16,6 +16,7 @@ from dlc.parser.graph import build_signal_graph
 from dlc.facts.extractor import CircuitFacts, extract_facts
 
 from dlc.facts.extractor import CircuitFacts, extract_facts, _component_display_name
+from dlc.parser.pin_geometry import absolute_pin_positions
 
 class IssueSeverity(str, Enum):
     ERROR = "error"
@@ -172,6 +173,151 @@ def _check_missing_subcircuit(circuit: Circuit, facts: CircuitFacts) -> list[Iss
                 f"and that the filename matches exactly (case-sensitive on macOS/Linux)."
             ),
         ))
+    return out
+
+_NON_LOGIC_FOR_ISOLATION = {
+    "In", "Out", "Tunnel", "Const", "Ground", "VDD", "Clock",
+    "Testcase", "Rectangle",
+}
+
+
+def _component_isolated_indices(
+    circuit: Circuit, netlist: NetList
+) -> set[int]:
+    isolated: set[int] = set()
+    for idx, comp in enumerate(circuit.components):
+        if not absolute_pin_positions(comp):
+            continue
+        if comp.element_name in _NON_LOGIC_FOR_ISOLATION:
+            continue
+        on_nets = [n for n in netlist.nets
+                   if any(p.component_index == idx for p in n.pins)]
+        if not on_nets:
+            isolated.add(idx)
+            continue
+        has_partner = any(
+            p.component_index != idx and p.element_name != "Tunnel"
+            for net in on_nets for p in net.pins
+        )
+        if not has_partner:
+            isolated.add(idx)
+    return isolated
+
+
+def _check_unused_top_outputs(
+    circuit: Circuit, facts: CircuitFacts
+) -> list[Issue]:
+    out: list[Issue] = []
+    seen: set[int] = set()
+    for bug in facts.bugs:
+        if bug.kind != "dangling_input":
+            continue
+        for p in bug.detail.get("pins", []) or []:
+            idx = p["component_index"]
+            if idx in seen:
+                continue
+            comp = circuit.components[idx]
+            if not comp.is_output():
+                continue
+            seen.add(idx)
+            label = comp.label or f"Out[{idx}]"
+            out.append(Issue(
+                kind="unused_top_output",
+                severity=IssueSeverity.ERROR,
+                title=f"Output '{label}' is never driven",
+                message=(
+                    f"Top-level output '{label}' has no wire feeding it. "
+                    f"The circuit defines this as an output but never "
+                    f"computes a value for it."
+                ),
+                component_indices=[idx],
+                location=(comp.position.x, comp.position.y),
+                suggested_fix=(
+                    f"Connect a driving signal (a gate output, a Const, "
+                    f"or an In) to '{label}', or remove the Out pin if "
+                    f"it isn't needed."
+                ),
+            ))
+    return out
+
+
+def _check_isolated_components(
+    circuit: Circuit, netlist: NetList
+) -> list[Issue]:
+    """Components whose every attached pin sits in a singleton net."""
+    out: list[Issue] = []
+    for idx in sorted(_component_isolated_indices(circuit, netlist)):
+        comp = circuit.components[idx]
+        name = _component_display_name(comp, idx)
+        out.append(Issue(
+            kind="isolated_component",
+            severity=IssueSeverity.WARNING,
+            title=f"Orphan component {name}",
+            message=(
+                f"Component {name} at ({comp.position.x}, {comp.position.y}) "
+                f"has no wires connecting any of its pins to the rest of "
+                f"the circuit. It contributes nothing."
+            ),
+            component_indices=[idx],
+            location=(comp.position.x, comp.position.y),
+            suggested_fix=(
+                f"Either wire {name} into your circuit, or delete it if "
+                f"it's leftover from an earlier design."
+            ),
+        ))
+    return out
+
+
+def _check_empty_tunnels(
+    circuit: Circuit, netlist: NetList
+) -> list[Issue]:
+    """Tunnel-only nets — named connection points with no actual signal."""
+    out: list[Issue] = []
+    for net in netlist.nets:
+        if not net.tunnel_names:
+            continue
+        if any(p.element_name != "Tunnel" for p in net.pins):
+            continue
+        tunnel_indices = sorted({
+            p.component_index for p in net.pins if p.element_name == "Tunnel"
+        })
+        net_name = sorted(net.tunnel_names)[0]
+        anchor = circuit.components[tunnel_indices[0]].position
+        if len(tunnel_indices) > 1:
+            out.append(Issue(
+                kind="empty_tunnel",
+                severity=IssueSeverity.WARNING,
+                title=f"Tunnel net '{net_name}' carries no signal",
+                message=(
+                    f"Tunnels named '{net_name}' are connected to each "
+                    f"other but nothing drives or reads them. The named "
+                    f"net is electrically isolated."
+                ),
+                component_indices=tunnel_indices,
+                location=(anchor.x, anchor.y),
+                suggested_fix=(
+                    f"Either wire a driving signal into one of the "
+                    f"'{net_name}' tunnels, or delete them."
+                ),
+            ))
+        else:
+            out.append(Issue(
+                kind="empty_tunnel",
+                severity=IssueSeverity.WARNING,
+                title=f"Isolated Tunnel '{net_name}'",
+                message=(
+                    f"Tunnel '{net_name}' has no signal — no other Tunnel "
+                    f"shares this NetName and no wire connects to it. "
+                    f"This Tunnel does nothing in the circuit."
+                ),
+                component_indices=tunnel_indices,
+                location=(anchor.x, anchor.y),
+                suggested_fix=(
+                    f"Either connect a wire to this Tunnel, place a "
+                    f"matching Tunnel named '{net_name}' elsewhere in "
+                    f"the circuit, or delete it."
+                ),
+            ))
     return out
 
 # Public API
