@@ -16,12 +16,9 @@ Output:
     - per-net summary tagged with anomalies + inferred width
     - per-component topology (predecessors, successors)
     - bug facts (dangling_input, multi_driver, combinational_cycle,
-      width_conflict, missing_subcircuit)
+      width_conflict, missing_subcircuit, dangling subcircuit reference input,
+      missing subcircuit reference, isolated component, empty tunnel, unused_top_output)
     - to_dict() / to_json() for JSON-safe export to the LLM layer.
-
-Combinational cycles are filtered to "purely combinational": cycles that
-pass through a clocked element (Register, Clock, RAM, D-FlipFlop, ...)
-are NOT flagged. (Note to be modified when F8 is done)
 """
 
 from dataclasses import dataclass, field, asdict
@@ -331,10 +328,7 @@ def _purely_combinational_cycles(
 ) -> list[list[int]]:
     cycles: list[list[int]] = []
     for cyc in nx.simple_cycles(graph):
-        if any(
-            circuit.components[i].element_name in _CLOCKED_ELEMENTS
-            for i in cyc
-        ):
+        if any(_is_or_contains_clocked(circuit, i) for i in cyc):
             continue
         cycles.append(list(cyc))
     return cycles
