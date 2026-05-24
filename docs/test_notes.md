@@ -256,7 +256,7 @@ Fact extractor:
 uv run python -c "
 from dlc.parser.dig_parser import parse_dig_file
 from dlc.facts.extractor import extract_facts
-c = parse_dig_file('data/sample_circuits/tier3_realistic/pipelined_adder_correct.dig') # your .dig
+c = parse_dig_file('data/sample_circuits/tier1_buggy/unused_top_output.dig') # your .dig
 f = extract_facts(c)
 print(f.header); print()
 print('I/O:'); [print(f'  {io.direction.upper()} {io.label} {io.bit_width}-bit @ {io.position}') for io in f.inputs + f.outputs]
