@@ -182,8 +182,7 @@ def check_wire_completeness(
     graph=None,
     facts: CircuitFacts | None = None,
 ) -> IssueCollection:
-    """Run all wire-completeness checks against `circuit`.
-    Auto-builds netlist/graph/facts when not provided."""
+    """Run all wire-completeness checks against `circuit`."""
     if netlist is None:
         netlist = build_netlist(circuit)
     if graph is None:
@@ -192,4 +191,7 @@ def check_wire_completeness(
         facts = extract_facts(circuit, netlist=netlist, graph=graph)
 
     issues = IssueCollection()
+    issues.extend(_check_dangling_inputs(circuit, facts))
+    issues.extend(_check_multi_drivers(circuit, facts))
+    issues.extend(_check_missing_subcircuit(circuit, facts))
     return issues
