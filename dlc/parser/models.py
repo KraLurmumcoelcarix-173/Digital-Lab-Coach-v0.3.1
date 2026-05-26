@@ -104,6 +104,7 @@ class Circuit:
     source_path: str | None = None
     format_version: int | None = None
     subcircuits: list["SubcircuitReference"] = field(default_factory=list) 
+    attributes: dict = field(default_factory=dict)
 
     def inputs(self) -> list[Component]:
         return [c for c in self.components if c.is_input()]

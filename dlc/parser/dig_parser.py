@@ -226,6 +226,8 @@ def _parse_one_file(
 
     version_text = root.findtext("version")
     format_version = int(version_text) if version_text is not None else None
+    
+    top_attrs = _parse_attributes(root.find("attributes"))
 
     components: list[Component] = []
     visual_elements = root.find("visualElements")
@@ -238,13 +240,14 @@ def _parse_one_file(
     if wires_block is not None:
         for w in wires_block.findall("wire"):
             wires.append(_parse_wire(w))
- 
+
     circuit = Circuit(
         components=components,
         wires=wires,
         source_path=path,
         format_version=format_version,
         subcircuits=[],
+        attributes=top_attrs,
     )
 
     # Resolve subcircuit references. They are components whose element_name

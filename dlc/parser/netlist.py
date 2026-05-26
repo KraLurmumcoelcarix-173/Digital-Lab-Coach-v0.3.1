@@ -32,9 +32,9 @@ from dlc.parser.models import Circuit, Component, Wire
 from dlc.parser.pin_geometry import absolute_pin_positions
 
 
-PIN_SNAP_TOLERANCE = 30
-# Large enough to cover wide subcircuit instances
+PIN_SNAP_TOLERANCE = 30 # Large enough to cover wide subcircuit instances
 IMPLICIT_PIN_RADIUS = 500
+_SUBCIRCUIT_DEFAULT_WIDTH_GRID = 10  # 200 units when child has no Width
 NO_SIGNAL_ELEMENTS = {"Testcase", "Rectangle"}
 
 class _UnionFind:
@@ -171,15 +171,50 @@ def _midpoint_branches(circuit: Circuit) -> list[tuple[tuple, tuple]]:
                     pairs.append((a, ep))
     return pairs
 
+def _subcircuit_pin_specs(child) -> list:
+    from dlc.parser.pin_geometry import PinSpec
+    width_grid = int(child.attributes.get("Width", _SUBCIRCUIT_DEFAULT_WIDTH_GRID))
+    body_width = width_grid * 20
+    pins = []
+    child_ins = list(child.inputs())
+    child_outs = list(child.outputs())
+    for i, child_in in enumerate(child_ins):
+        pins.append(PinSpec(
+            name=child_in.label or f"in_{i}",
+            offset_x=0,
+            offset_y=i * 20,
+            direction="in",
+        ))
+    for i, child_out in enumerate(child_outs):
+        pins.append(PinSpec(
+            name=child_out.label or f"out_{i}",
+            offset_x=body_width,
+            offset_y=i * 20,
+            direction="out",
+        ))
+    return pins
+
 def _all_predicted_pins(circuit: Circuit) -> list:
-    """
-    Return list of (component_index, (abs_x, abs_y), spec) for every predicted
-    pin of every component with known geometry.
-    """
+    sub_predicted = {}
+    for sub_ref in circuit.subcircuits:
+        if sub_ref.child_circuit is None:
+            continue
+        if "Width" not in sub_ref.child_circuit.attributes:
+            continue
+        sub_predicted[id(sub_ref.parent_component)] = sub_ref.child_circuit
     out = []
     for c_idx, comp in enumerate(circuit.components):
-        for abs_pos, spec in absolute_pin_positions(comp):
-            out.append((c_idx, (abs_pos.x, abs_pos.y), spec))
+        if comp.element_name.endswith(".dig") and id(comp) in sub_predicted:
+            child = sub_predicted[id(comp)]
+            for spec in _subcircuit_pin_specs(child):
+                out.append((
+                    c_idx,
+                    (comp.position.x + spec.offset_x, comp.position.y + spec.offset_y),
+                    spec,
+                ))
+        else:
+            for abs_pos, spec in absolute_pin_positions(comp):
+                out.append((c_idx, (abs_pos.x, abs_pos.y), spec))
     return out
 
 
@@ -325,11 +360,25 @@ def _attach_implicit_pins(
     Critical filter: only degree-1 wire endpoints are eligible. A pin
     location is where exactly one wire terminates; degree-2 (L-bend) and
     degree-3+ (junction) coords are routing, not pins. 
+
+    Only degree-1 wire endpoints are eligible.
     """
+    sub_with_predicted = set()
+    for sub_ref in circuit.subcircuits:
+        if sub_ref.child_circuit is None:
+            continue
+        if "Width" not in sub_ref.child_circuit.attributes:
+            continue
+        for idx, comp in enumerate(circuit.components):
+            if comp is sub_ref.parent_component:
+                sub_with_predicted.add(idx)
+                break
+            
     candidates = [
         (idx, comp) for idx, comp in enumerate(circuit.components)
         if not absolute_pin_positions(comp)
         and comp.element_name not in NO_SIGNAL_ELEMENTS
+        and idx not in sub_with_predicted
     ]
     if not candidates:
         return
