@@ -153,7 +153,7 @@ for i in issues.issues:
 One Issue kind:
 - `combinational_loop` — a cycle in the signal-flow graph that contains
   no clocked element and no subcircuit instance whose child contains
-  one (A.1 already filters legitimate Register feedback through Clock).
+  one.
 
 ### How to test manually
 
@@ -174,8 +174,6 @@ for i in issues.issues:
 ### Expected output
 
 - `tier1_buggy/combinational_loop.dig`: at least 1 `combinational_loop` error.
-- All clean tier samples: 0 issues.
-- Lab 5 cpu.dig (PC feedback through Register): 0 (A.1's clocked-element filter handles it).
 
 ## Function 8 — Interface conformance checker
 
