@@ -72,7 +72,7 @@ uv run python -c "
 from dlc.parser.dig_parser import parse_dig_file
 from dlc.analyzer.wire_completeness import check_wire_completeness
 print(check_wire_completeness(parse_dig_file(
-    'data/sample_circuits/tier1_buggy/dangling_input.dig'
+    'data/sample_circuits/tier1_buggy/dangling_input.dig'  # your .dig file
 )).to_json(indent=2))
 "
 ```
@@ -126,9 +126,35 @@ One Issue kind:
 
 - `tier1_buggy/combinational_loop.dig`: at least 1 `combinational_loop` error.
 
-## Function 8 — Interface conformance checker
+## Function 8 — Subcircuit-interface conformance
 
-*(TBD)*
+### What it produces
+
+One Issue kind:
+- `dangling_subcircuit_input` — a parent circuit references a
+  subcircuit but doesn't wire one of the subcircuit's declared inputs.
+
+### Recursive deep-check (whole subcircuit tree)
+
+`check_all_l1` runs the L1 checkers only on the top circuit.
+`check_all_l1_deep` recurses into every resolved subcircuit child and
+prefixes each issue's title with the file breadcrumb. Use deep when you 
+want a single report covering the entire .dig hierarchy.
+
+```bash
+uv run python -c "
+from dlc.parser.dig_parser import parse_dig_file
+from dlc.analyzer import check_all_l1_deep
+TARGET = 'data/sample_circuits/tier2_buggy/dangling_subcircuit_input.dig' # your .dig file
+for i in check_all_l1_deep(parse_dig_file(TARGET)).issues:
+    print(f'  [{i.severity.value}] {i.title}')
+    print(f'    {i.message}')
+"
+```
+
+### Expected output
+
+- `tier2_buggy/dangling_subcircuit_input.dig`: 1 `dangling_subcircuit_input` error
 
 ## Function 9 — Sequential/timing checker
 
