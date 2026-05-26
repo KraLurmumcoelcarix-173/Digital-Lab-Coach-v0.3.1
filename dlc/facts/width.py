@@ -75,7 +75,7 @@ def pin_width(component: Component, pin_name: str) -> int | None:
             n = _bits(component)
             if n <= 2:
                 return 1
-            return (n - 1).bit_length()
+            return n.bit_length()
         return None
 
     if e == "Multiplexer":
