@@ -306,6 +306,39 @@ def _attach_pin(
     netlist.by_coord[coord] = new_id
 
 
+def _assign_out_pins_to_tunnels(
+    unsnapped_outs: list,
+    tunnel_coords: set,
+    excluded_targets: set,
+    tolerance: int,
+) -> dict:
+    """
+    Greedy stable matching between unsnapped OUT pins and tunnel coords.
+    """
+    triples = []
+    for c_idx, spec_name, px, py in unsnapped_outs:
+        for tc in tunnel_coords:
+            if tc in excluded_targets:
+                continue
+            d = abs(tc[0] - px) + abs(tc[1] - py)
+            if d > tolerance:
+                continue
+            triples.append((d, c_idx, spec_name, tc))
+    triples.sort()
+
+    pin_to_tunnel: dict = {}
+    claimed_tunnels: set = set()
+    for _d, c_idx, spec_name, tc in triples:
+        pin_key = (c_idx, spec_name)
+        if pin_key in pin_to_tunnel:
+            continue
+        if tc in claimed_tunnels:
+            continue
+        pin_to_tunnel[pin_key] = tc
+        claimed_tunnels.add(tc)
+    return pin_to_tunnel
+
+
 def _attach_pins_endpoint_first(
     circuit: Circuit,
     netlist: NetList,
@@ -318,6 +351,22 @@ def _attach_pins_endpoint_first(
         predicted, endpoints, PIN_SNAP_TOLERANCE
     )
     snapped_endpoints: set = set(pin_to_coord.values())
+    exact_match_targets: set = set()
+    fallback_outs: list = []
+    for c_idx, (px, py), spec in predicted:
+        if pin_to_coord.get((c_idx, spec.name)) is not None:
+            continue
+        if spec.direction != "out":
+            continue
+        if (px, py) in netlist.by_coord:
+            exact_match_targets.add((px, py))
+        else:
+            fallback_outs.append((c_idx, spec.name, px, py))
+
+    excluded_targets = snapped_endpoints | exact_match_targets
+    pin_to_tunnel = _assign_out_pins_to_tunnels(
+        fallback_outs, tunnel_coords, excluded_targets, PIN_SNAP_TOLERANCE
+    )
 
     claimed_endpoints: set = set()
     for c_idx, (px, py), spec in predicted:
@@ -332,24 +381,7 @@ def _attach_pins_endpoint_first(
         if spec.direction == "out":
             target = (px, py) if (px, py) in netlist.by_coord else None
             if target is None:
-                has_unclaimed_endpoint_nearby = any(
-                    ep not in snapped_endpoints
-                    and abs(ep[0] - px) + abs(ep[1] - py) <= PIN_SNAP_TOLERANCE
-                    for ep in endpoints
-                )
-                if not has_unclaimed_endpoint_nearby:
-                    best = None
-                    best_d = PIN_SNAP_TOLERANCE + 1
-                    for tc in tunnel_coords:
-                        if tc in snapped_endpoints:
-                            continue
-                        d = abs(tc[0] - px) + abs(tc[1] - py)
-                        if d < best_d or (
-                            d == best_d and (best is None or tc < best)
-                        ):
-                            best, best_d = tc, d
-                    if best is not None and best_d <= PIN_SNAP_TOLERANCE:
-                        target = best
+                target = pin_to_tunnel.get((c_idx, spec.name))
             if target is None:
                 target = (px, py)
             pin = _make_pin(c_idx, comp, spec, target)

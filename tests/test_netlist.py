@@ -404,3 +404,32 @@ def test_out_element_at_splitter_out_coord_joins_net():
         f"Out at (20, 60) should be driven by Splitter's out3 pin; "
         f"drivers got: {drivers}"
     )
+
+def test_sibling_out_pins_do_not_collapse_onto_one_tunnel():
+
+    from dlc.parser.models import Circuit, Component, Position, Wire
+    c = Circuit(
+        format_version=2,
+        components=[
+            Component("Comparator", Position(-220, 320), {"Bits": 7}),
+            Component("Tunnel", Position(-160, 340), {"NetName": "r-format"}),
+            Component("Tunnel", Position(-220, 320), {"NetName": "opcode"}),
+            Component("Const", Position(-260, 340),
+                      {"Value": 51, "Bits": 7}),
+        ],
+        wires=[Wire(Position(-260, 340), Position(-220, 340))],
+        source_path="synthetic",
+    )
+    nl = build_netlist(c)
+    multi_nets = [n for n in nl.nets if len(n.drivers()) > 1]
+    assert multi_nets == [], (
+        f"sibling Comparator outputs must not collapse onto the r-format "
+        f"tunnel; got multi-driver nets: "
+        f"{[[(d.element_name, d.pin_name) for d in n.drivers()] for n in multi_nets]}"
+    )
+    r_format_nets = [n for n in nl.nets if "r-format" in n.tunnel_names]
+    assert len(r_format_nets) == 1
+    drv = [(d.element_name, d.pin_name) for d in r_format_nets[0].drivers()]
+    assert drv == [("Comparator", "eq")], (
+        f"only eq (exact match) should drive r-format; got: {drv}"
+    )
