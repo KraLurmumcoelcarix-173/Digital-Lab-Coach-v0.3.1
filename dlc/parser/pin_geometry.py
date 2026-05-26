@@ -41,8 +41,8 @@ _VDD_PINS = [PinSpec("out", 0, 0, "out")]
 
 _ADD_PINS = [
     PinSpec("a",   0,  0,  "in"),
-    PinSpec("c_i", 0,  20, "in"),
-    PinSpec("b",   0,  40, "in"),
+    PinSpec("b",   0,  20, "in"),
+    PinSpec("c_i", 0,  40, "in"),
     PinSpec("s",   60, 0,  "out"),
     PinSpec("c_o", 60, 20, "out"),
 ]

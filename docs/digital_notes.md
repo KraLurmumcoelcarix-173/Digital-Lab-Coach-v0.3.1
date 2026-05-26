@@ -66,7 +66,7 @@ Digital's coordinate system: x increases rightward, y increases downward. Anchor
 | `Splitter` | `in_i` at (0, i*spacing) | `out_i` at (20, i*spacing) | spacing = 20 × `splitterSpreading` (default 1, can be 2+) |
 | `Register` | `D` (0, 0), `C` (0, 20), `en` (0, 40) | `Q` (60, 20) | `en` always present even when tied to Const(1) |
 | `Comparator` | `A` (0, 0), `B` (0, 20) | `gr` (60, 0), `eq` (60, 20), `le` (60, 40) | Width **60**, not 80 — common mistake |
-| `Add` | `a` (0, 0), `c_i` (0, 20), `b` (0, 40) | `s` (60, 0), `c_o` (60, 20) | Width **60**, c_o at y=20 not y=40 — verified for Bits=1, 4, 32. Earlier-assumed (80, 40) layout for c_o consistently snapped to wire L-bends and produced phantom multi-drivers |
+| `Add` | `a` (0, 0), `b` (0, 20), `c_i` (0, 40) | `s` (60, 0), `c_o` (60, 20) | Width **60**. Input order top-to-bottom matches Digital's UI: a, b, c_i. c_o at y=20 not y=40 — earlier-assumed (80, 40) layout consistently snapped to wire L-bends and produced phantom multi-drivers. |
 | `BitExtender` | `in` (0, 0) | `out` (80, 0) | Width varies with outputBits; snap tolerance absorbs ±20 |
 | `BarrelShifter` | `in` (0, 0), `sh` (0, 40) | `out` (60, 20) | |
 | `Seven-Seg` | `a/b/c/d` at `(0,-40)/(20,-40)/(40,-40)/(60,-40)`; `e/f/g` at `(0,180)/(20,180)/(40,180)`; `dp` at `(60, 240)` | (no outputs — display sink only) | Verified against Lab 2 (rotation=0) and tier3_latched_display (rotation=3). The `dp` pin sits one row below `e/f/g`, aligned x-wise with `d`. |
