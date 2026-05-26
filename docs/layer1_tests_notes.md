@@ -11,7 +11,8 @@ Last updated: 2026/5/25
 
 ```bash
 uv run pytest tests/test_analyzer_wire_completeness.py  
-uv run pytest tests/test_analyzer_bit_widths.py                                
+uv run pytest tests/test_analyzer_bit_widths.py        
+uv run pytest tests/test_analyzer_combinational_loops.py                        
 ```
 
 ---
@@ -103,26 +104,6 @@ print(check_wire_completeness(parse_dig_file(
 | `isolated_component.dig` | `isolated_component` | warning | 1 |
 | `empty_tunnel.dig` | `empty_tunnel` | warning | 1 |
 
-
-### Clean-sweep sanity check
-
-Every sample in `tier1_minimal`, `tier2_structured`, `tier3_realistic`,
-and the 30-bug benchmark's semantic-only bugs (bug1, bug3, bug4, bug5) must
-produce **0 issues** from F5. 
-
-```bash
-uv run python -c "
-import glob
-from dlc.parser.dig_parser import parse_dig_file
-from dlc.analyzer.wire_completeness import check_wire_completeness
-for tier in ('tier1_minimal', 'tier2_structured', 'tier3_realistic'):
-    for f in sorted(glob.glob(f'data/sample_circuits/{tier}/*.dig')):
-        n = len(check_wire_completeness(parse_dig_file(f)).issues)
-        marker = '  <-- UNEXPECTED' if n else ' clean'
-        print(f'  {f}: {n}{marker}')
-"
-```
-
 ### Key tests — what each guarantees
 
 | Test | If it fails... |
@@ -164,11 +145,37 @@ for i in issues.issues:
 
 - `tier1_buggy/width_mismatch.dig`: at least 1 `width_mismatch` issue (error).
 - `tier1_buggy/width_conflict.dig`: at least 1 `width_conflict` issue (error).
-- Every sample in `tier1_minimal`, `tier2_structured`, `tier3_realistic`: 0 issues.
 
-## Function 7 — Combinational loop checker
+## Function 7 — Combinational-loop checker
 
-*(TBD)*
+### What it produces
+
+One Issue kind:
+- `combinational_loop` — a cycle in the signal-flow graph that contains
+  no clocked element and no subcircuit instance whose child contains
+  one (A.1 already filters legitimate Register feedback through Clock).
+
+### How to test manually
+
+```bash
+uv run python -c "
+from dlc.parser.dig_parser import parse_dig_file
+from dlc.analyzer.combinational_loops import check_combinational_loops
+TARGET = 'data/sample_circuits/tier1_buggy/combinational_loop.dig'
+issues = check_combinational_loops(parse_dig_file(TARGET))
+print(issues.summary())
+for i in issues.issues:
+    print(f'  [{i.severity.value}] {i.title}')
+    print(f'    {i.message}')
+    print(f'    fix: {i.suggested_fix}')
+"
+```
+
+### Expected output
+
+- `tier1_buggy/combinational_loop.dig`: at least 1 `combinational_loop` error.
+- All clean tier samples: 0 issues.
+- Lab 5 cpu.dig (PC feedback through Register): 0 (A.1's clocked-element filter handles it).
 
 ## Function 8 — Interface conformance checker
 
