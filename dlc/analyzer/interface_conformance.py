@@ -34,7 +34,11 @@ def _check_dangling_subcircuit_inputs(
             for pin in net.pins:
                 if pin.component_index == inst_idx:
                     instance_pins[pin.pin_name] = (pin, net)
-        for child_in in child.inputs():
+        child_input_components = [
+            c for c in child.components
+            if c.is_input() or c.element_name == "Clock"
+        ]
+        for child_in in child_input_components:
             if not child_in.label:
                 continue
             entry = instance_pins.get(child_in.label)

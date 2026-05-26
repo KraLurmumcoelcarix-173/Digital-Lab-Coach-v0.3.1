@@ -172,13 +172,17 @@ def _midpoint_branches(circuit: Circuit) -> list[tuple[tuple, tuple]]:
     return pairs
 
 def _subcircuit_pin_specs(child) -> list:
+
     from dlc.parser.pin_geometry import PinSpec
     width_grid = int(child.attributes.get("Width", _SUBCIRCUIT_DEFAULT_WIDTH_GRID))
     body_width = width_grid * 20
-    pins = []
-    child_ins = list(child.inputs())
+    child_inputs = [
+        c for c in child.components
+        if c.is_input() or c.element_name == "Clock"
+    ]
     child_outs = list(child.outputs())
-    for i, child_in in enumerate(child_ins):
+    pins = []
+    for i, child_in in enumerate(child_inputs):
         pins.append(PinSpec(
             name=child_in.label or f"in_{i}",
             offset_x=0,
@@ -281,16 +285,6 @@ def _attach_pin(
     coord: tuple[int, int],
     is_dangling: bool,
 ) -> None:
-    """
-    Attach a pin to the netlist. If `coord` is already on a net, 
-    append the pin to that net. Otherwise create a fresh singleton 
-    net for the pin.
-
-    When `is_dangling` is True we do NOT pollute `by_coord` with the
-    singleton's coord, so two different dangling pins that happen to share
-    a predicted coord remain as separate dangling singletons rather than
-    silently merging into one.
-    """
     nid = netlist.by_coord.get(coord)
     if nid is not None:
         netlist.nets[nid].pins.append(pin)
@@ -298,8 +292,7 @@ def _attach_pin(
     new_id = len(netlist.nets)
     new_net = Net(net_id=new_id, coords={coord}, pins=[pin])
     netlist.nets.append(new_net)
-    if not is_dangling:
-        netlist.by_coord[coord] = new_id
+    netlist.by_coord[coord] = new_id
 
 
 def _attach_pins_endpoint_first(
@@ -373,7 +366,7 @@ def _attach_implicit_pins(
             if comp is sub_ref.parent_component:
                 sub_with_predicted.add(idx)
                 break
-            
+
     candidates = [
         (idx, comp) for idx, comp in enumerate(circuit.components)
         if not absolute_pin_positions(comp)

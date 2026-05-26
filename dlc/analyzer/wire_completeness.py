@@ -101,9 +101,12 @@ def _check_dangling_inputs(
         pins = []
         for p in raw:
             idx = p["component_index"]
-            if circuit.components[idx].is_output():
+            comp = circuit.components[idx]
+            if comp.is_output():
                 continue
             if idx in isolated:
+                continue
+            if comp.element_name.endswith(".dig"):
                 continue
             pins.append(p)
         if not pins:
