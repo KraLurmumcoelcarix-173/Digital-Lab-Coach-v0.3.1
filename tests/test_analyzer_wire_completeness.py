@@ -1,5 +1,5 @@
 """
-Layer 1 basic checker
+F5 + missing subcircuit checker
 """
 
 import json

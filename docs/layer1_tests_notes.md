@@ -10,7 +10,8 @@ Last updated: 2026/5/25
 ## Quick reference
 
 ```bash
-uv run pytest tests/test_layer_1.py                                
+uv run pytest tests/test_analyzer_wire_completeness.py  
+uv run pytest tests/test_analyzer_bit_widths.py                                
 ```
 
 ---
@@ -44,7 +45,7 @@ An `IssueCollection` of `Issue` records. Each `Issue` carries:
 uv run python -c "
 from dlc.parser.dig_parser import parse_dig_file
 from dlc.analyzer.wire_completeness import check_wire_completeness
-TARGET = 'data/sample_circuits/30_buggy_benchmark/bug2_wrong_floating_pipeline_output/Wrong_floating_pipeline_output.dig'  # your .dig
+TARGET = 'data/sample_circuits/tier1_buggy/isolated_component.dig'  # your .dig
 issues = check_wire_completeness(parse_dig_file(TARGET))
 print(issues.summary())
 for i in issues.issues:
@@ -115,7 +116,32 @@ for tier in ('tier1_minimal', 'tier2_structured', 'tier3_realistic'):
 
 ## Function 6 — Bit-width consistency checker
 
-*(TBD )*
+### What it produces
+
+Two Issue kinds:
+- `width_conflict` 
+- `width_mismatch`
+
+### How to test manually
+
+```bash
+uv run python -c "
+from dlc.parser.dig_parser import parse_dig_file
+from dlc.analyzer.bit_widths import check_bit_widths
+TARGET = 'data/sample_circuits/tier1_buggy/width_mismatch.dig'
+issues = check_bit_widths(parse_dig_file(TARGET))
+print(issues.summary())
+for i in issues.issues:
+    print(f'  [{i.severity.value}] {i.title}')
+    print(f'    {i.message}')
+    print(f'    fix: {i.suggested_fix}')
+"
+```
+
+### Expected output
+
+- `tier1_buggy/width_mismatch.dig`: at least 1 `width_mismatch` issue (error).
+- Every sample in `tier1_minimal`, `tier2_structured`, `tier3_realistic`: 0 issues.
 
 ## Function 7 — Combinational loop checker
 
