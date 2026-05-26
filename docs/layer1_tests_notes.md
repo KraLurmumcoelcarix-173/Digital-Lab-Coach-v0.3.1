@@ -141,6 +141,7 @@ for i in issues.issues:
 ### Expected output
 
 - `tier1_buggy/width_mismatch.dig`: at least 1 `width_mismatch` issue (error).
+- `tier1_buggy/width_conflict.dig`: at least 1 `width_conflict` issue (error).
 - Every sample in `tier1_minimal`, `tier2_structured`, `tier3_realistic`: 0 issues.
 
 ## Function 7 — Combinational loop checker
