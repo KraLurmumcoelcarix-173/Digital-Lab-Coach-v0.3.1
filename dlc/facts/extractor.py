@@ -350,6 +350,37 @@ def _pin_descriptor(circuit: Circuit, pin: Pin) -> str:
     comp = circuit.components[pin.component_index]
     return f"{_component_display_name(comp, pin.component_index)}.{pin.pin_name}"
 
+def _collect_missing_subcircuits_recursive(
+    circuit: Circuit, bugs: list, chain: list[str]
+) -> None:
+    for sub_ref in circuit.subcircuits:
+        if sub_ref.child_circuit is None and sub_ref.resolution_error:
+            inst_idx = -1
+            if not chain:
+                for idx, comp in enumerate(circuit.components):
+                    if comp is sub_ref.parent_component:
+                        inst_idx = idx
+                        break
+            chain_text = " -> ".join(chain) if chain else ""
+            description = (
+                f"Subcircuit '{sub_ref.reference}' could not be resolved"
+                + (f" (nested via {chain_text})" if chain_text else "")
+                + f": {sub_ref.resolution_error}"
+            )
+            bugs.append(BugFact(
+                kind="missing_subcircuit",
+                description=description,
+                component_indices=[inst_idx] if inst_idx >= 0 else [],
+                detail={
+                    "reference": sub_ref.reference,
+                    "resolution_error": sub_ref.resolution_error,
+                    "parent_chain": list(chain),
+                },
+            ))
+        elif sub_ref.child_circuit is not None:
+            _collect_missing_subcircuits_recursive(
+                sub_ref.child_circuit, bugs, chain + [sub_ref.reference]
+            )
 
 def _collect_bugs(
     circuit: Circuit,
