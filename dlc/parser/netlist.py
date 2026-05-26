@@ -606,7 +606,9 @@ def build_netlist(circuit: Circuit) -> NetList:
 
     # Steps 4: endpoint-primary pin attachment (Voronoi).
     endpoints = _collect_wire_endpoints(circuit)
-    claimed = _attach_pins_endpoint_first(circuit, netlist, endpoints)
+    claimed = _attach_pins_endpoint_first(
+        circuit, netlist, endpoints, tunnel_coords
+    )
 
     # Step 5: implicit pins for no-geometry components, deduped per net.
     _attach_implicit_pins(circuit, netlist, endpoints, claimed)
