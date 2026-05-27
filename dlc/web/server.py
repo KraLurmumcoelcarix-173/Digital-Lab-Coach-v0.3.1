@@ -6,8 +6,10 @@ Run with: `uv run python -m dlc.web.server`.
 Endpoints:
   GET  /                       index.html
   GET  /static/...             JS, CSS, images
-  POST /api/circuit            multipart .dig upload; returns
-                               {"graph": ..., "summary": ...}
+  POST /api/circuit            multipart upload of one OR MORE .dig
+                               files (a parent + its subcircuits).
+                               Returns {"files": [{filename, graph,
+                               summary, error}, ...]}.
   GET  /api/health             readiness probe
 """
 from pathlib import Path
@@ -40,31 +42,47 @@ def health() -> dict:
 
 
 @app.post("/api/circuit")
-async def circuit(file: UploadFile = File(...)) -> dict:
-    if not file.filename or not file.filename.endswith(".dig"):
-        raise HTTPException(status_code=400, detail="Please upload a .dig file.")
+async def circuit(files: list[UploadFile] = File(...)) -> dict:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files received.")
 
-    with tempfile.NamedTemporaryFile(
-        suffix=".dig", delete=False, mode="wb"
-    ) as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
+    tmp_dir = Path(tempfile.mkdtemp(prefix="dlc-"))
+    saved: list[tuple[str, Path]] = []
+    for f in files:
+        if not f.filename or not f.filename.endswith(".dig"):
+            continue
+        name = Path(f.filename).name
+        path = tmp_dir / name
+        with open(path, "wb") as out:
+            out.write(await f.read())
+        saved.append((name, path))
 
-    try:
-        c = parse_dig_file(tmp_path)
-        nl = build_netlist(c)
-        g = build_signal_graph(c, nl)
-    except Exception as exc:
+    if not saved:
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to parse circuit: {type(exc).__name__}: {exc}",
+            status_code=400, detail="Please upload at least one .dig file."
         )
 
-    return {
-        "filename": file.filename,
-        "graph": to_cytoscape(c, nl, g),
-        "summary": circuit_summary(c, nl),
-    }
+    results: list[dict] = []
+    for name, path in saved:
+        try:
+            c = parse_dig_file(str(path))
+            nl = build_netlist(c)
+            g = build_signal_graph(c, nl)
+            results.append({
+                "filename": name,
+                "graph": to_cytoscape(c, nl, g),
+                "summary": circuit_summary(c, nl),
+                "error": None,
+            })
+        except Exception as exc:
+            results.append({
+                "filename": name,
+                "graph": None,
+                "summary": None,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+
+    return {"files": results}
 
 
 def main() -> None:
