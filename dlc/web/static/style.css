@@ -238,3 +238,4 @@ main {
 }
 #summary .badge.warn { background: #fef3c7; color: #92400e; }
 #summary .badge.err  { background: #fee2e2; color: #991b1b; }
+#summary .ok { color: #15803d; font-weight: 600; }

@@ -53,6 +53,7 @@ _FAMILY_DISPLAY: dict[str, str] = {
     "other": "OTHER",
 }
 
+_HIDDEN_ATTRS = {"lastDataFile"}
 
 def _family(element_name: str) -> str:
     if element_name.endswith(".dig"):
@@ -95,6 +96,7 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
                 "attributes": {
                     k: v for k, v in comp.attributes.items()
                     if isinstance(v, (str, int, float, bool))
+                    and k not in _HIDDEN_ATTRS
                 },
                 "x_dig": comp.position.x,
                 "y_dig": comp.position.y,

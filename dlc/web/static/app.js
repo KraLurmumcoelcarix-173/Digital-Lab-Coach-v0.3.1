@@ -324,6 +324,23 @@ function hidePopup() {
   popupEl.classList.add("hidden");
 }
 
+window.addEventListener("keydown", (e) => {
+  if (popupEl.classList.contains("hidden")) return;
+  if (e.key === "ArrowDown") {
+    popupEl.scrollTop += 40;
+    e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    popupEl.scrollTop -= 40;
+    e.preventDefault();
+  } else if (e.key === "PageDown") {
+    popupEl.scrollTop += popupEl.clientHeight - 20;
+    e.preventDefault();
+  } else if (e.key === "PageUp") {
+    popupEl.scrollTop -= popupEl.clientHeight - 20;
+    e.preventDefault();
+  }
+});
+
 function renderPinList(byPin, kind) {
   const keys = Object.keys(byPin).sort();
   if (keys.length === 0) return "";
@@ -394,7 +411,7 @@ function renderSummary(s) {
     <table>
       <tr><td class="k">nets</td><td class="v">${stats.total ?? 0}</td></tr>
       <tr><td class="k">driven</td><td class="v">${stats.driven ?? 0}</td></tr>
-            <tr><td class="k">structural issues</td><td class="v">${undrivenBadge}${multiBadge}${(!undrivenBadge && !multiBadge) ? '<span class="muted">none</span>' : ""}</td></tr>
+          <tr><td class="k">structural issues</td><td class="v">${undrivenBadge}${multiBadge}${(!undrivenBadge && !multiBadge) ? '<span class="ok">none</span>' : ""}</td></tr>
     </table>
 
     <h2 style="margin-top:14px">Inputs (${(s.inputs || []).length})</h2>
