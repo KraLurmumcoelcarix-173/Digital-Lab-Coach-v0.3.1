@@ -62,23 +62,46 @@ const CY_STYLE = [
   },
 ];
 
+//DOM 
+
+const MAX_FILES = 16;
+
 const fileInput   = document.getElementById("file-input");
 const fileSelect  = document.getElementById("file-select");
 const prevBtn     = document.getElementById("prev-btn");
 const nextBtn     = document.getElementById("next-btn");
+const clearBtn    = document.getElementById("clear-btn");
 const placeholder = document.getElementById("placeholder");
 const summaryEl   = document.getElementById("summary");
 const popupEl     = document.getElementById("hover-popup");
 const popupTitle  = document.getElementById("hover-popup-title");
 const popupBody   = document.getElementById("hover-popup-body");
 
-let fileObjects = [];
-let loaded      = [];
+//Session state 
+
+let fileObjects = [];   // browser File[]
+let loaded      = [];   // server response per file
 let currentIdx  = 0;
 let cy          = null;
 
+
 fileInput.addEventListener("change", async () => {
   if (!fileInput.files || fileInput.files.length === 0) return;
+
+  const incomingNames = new Set();
+  for (const f of fileInput.files) incomingNames.add(f.name);
+  const keptExisting = fileObjects.filter((f) => !incomingNames.has(f.name));
+  const projectedTotal = keptExisting.length + fileInput.files.length;
+  if (projectedTotal > MAX_FILES) {
+    alert(
+      `File limit is ${MAX_FILES}. This upload would bring you to ` +
+      `${projectedTotal}. Use "Clear all" to reset, or upload fewer ` +
+      `files at once.`
+    );
+    fileInput.value = "";
+    return;
+  }
+
   for (const f of fileInput.files) {
     fileObjects = fileObjects.filter((existing) => existing.name !== f.name);
     fileObjects.push(f);
@@ -86,6 +109,30 @@ fileInput.addEventListener("change", async () => {
   fileInput.value = "";
   await postAll();
 });
+
+clearBtn.addEventListener("click", () => {
+  if (loaded.length === 0) return;
+  if (!confirm("Clear all uploaded files and return to the dashboard?")) return;
+  resetDashboard();
+});
+
+function resetDashboard() {
+  fileObjects = [];
+  loaded = [];
+  currentIdx = 0;
+  if (cy) { cy.destroy(); cy = null; }
+  fileSelect.innerHTML = "<option>(no file)</option>";
+  fileSelect.disabled = true;
+  prevBtn.disabled = true;
+  nextBtn.disabled = true;
+  clearBtn.disabled = true;
+  placeholder.classList.remove("hidden");
+  placeholder.innerHTML =
+    `No circuit loaded. Add a <code>.dig</code> file from the toolbar ` +
+    `above &mdash; multiple files (parent + subcircuits) supported.`;
+  summaryEl.innerHTML = `<span class="muted">No file loaded.</span>`;
+  hidePopup();
+}
 
 prevBtn.addEventListener("click", () => {
   if (loaded.length === 0) return;
@@ -137,6 +184,7 @@ async function postAll() {
   fileSelect.disabled = false;
   prevBtn.disabled = loaded.length < 2;
   nextBtn.disabled = loaded.length < 2;
+  clearBtn.disabled = false;
 
   renderCurrent();
 }
@@ -210,8 +258,13 @@ function showNodePopup(node) {
   const title = d.comp_label ? `${d.element_name} - ${d.comp_label}` : d.element_name;
   popupTitle.textContent = title;
 
+  const bits = (d.attributes && d.attributes.Bits !== undefined)
+    ? d.attributes.Bits : null;
+  const bitsRow = bits !== null
+    ? `<tr><td class="k">bits</td><td class="v">${escapeHtml(String(bits))}</td></tr>`
+    : "";
   const attrRows = Object.entries(d.attributes || {})
-    .filter(([k]) => k !== "Label")
+    .filter(([k]) => k !== "Label" && k !== "Bits")
     .map(([k, v]) =>
       `<tr><td class="k">${escapeHtml(k)}</td><td class="v">${escapeHtml(String(v))}</td></tr>`
     ).join("");
@@ -229,6 +282,7 @@ function showNodePopup(node) {
     <table>
       <tr><td class="k">family</td><td class="v">${escapeHtml(d.family_display || d.family)}</td></tr>
       <tr><td class="k">index</td><td class="v">${escapeHtml(d.id)}</td></tr>
+      ${bitsRow}
       <tr><td class="k">.dig pos</td><td class="v">(${d.x_dig}, ${d.y_dig})</td></tr>
       ${attrRows}
     </table>
@@ -251,6 +305,7 @@ function showEdgePopup(edge) {
   popupBody.innerHTML = `
     <table>
       <tr><td class="k">net id</td><td class="v">${escapeHtml(d.net_id ?? "?")}</td></tr>
+      <tr><td class="k">bits</td><td class="v">${escapeHtml(d.bits ?? "?")}</td></tr>
       <tr><td class="k">from</td><td class="v">${escapeHtml(sourceLabel)} [${escapeHtml(d.source)}] . ${escapeHtml(d.driver_pin || "?")}</td></tr>
       <tr><td class="k">to</td><td class="v">${escapeHtml(targetLabel)} [${escapeHtml(d.target)}] . ${escapeHtml(d.sink_pin || "?")}</td></tr>
     </table>
@@ -332,7 +387,7 @@ function renderSummary(s) {
     <table>
       <tr><td class="k">nets</td><td class="v">${stats.total ?? 0}</td></tr>
       <tr><td class="k">driven</td><td class="v">${stats.driven ?? 0}</td></tr>
-      <tr><td class="k">issues</td><td class="v">${undrivenBadge}${multiBadge}${(!undrivenBadge && !multiBadge) ? '<span class="muted">none</span>' : ""}</td></tr>
+            <tr><td class="k">structural issues</td><td class="v">${undrivenBadge}${multiBadge}${(!undrivenBadge && !multiBadge) ? '<span class="muted">none</span>' : ""}</td></tr>
     </table>
 
     <h2 style="margin-top:14px">Inputs (${(s.inputs || []).length})</h2>
