@@ -85,6 +85,9 @@ const issuesListEl  = document.getElementById("issues-list");
 const issuesCountsEl= document.getElementById("issues-counts");
 const testsStatusEl = document.getElementById("tests-status");
 const testsResultsEl= document.getElementById("tests-results");
+const testsProgressEl     = document.getElementById("tests-progress");
+const testsProgressTextEl = document.getElementById("tests-progress-text");
+const perRowToggle  = document.getElementById("perrow-toggle");
 const runTestsBtn   = document.getElementById("run-tests-btn");
 const muteToggle    = document.getElementById("mute-toggle");
 const popupEl       = document.getElementById("hover-popup");
@@ -645,46 +648,111 @@ runTestsBtn.addEventListener("click", async () => {
   if (!sessionId || loaded.length === 0) return;
   const file = loaded[currentIdx];
   if (!file || !file.summary || !file.summary.has_testcases) return;
+  const mode = perRowToggle.checked ? "per_row" : "general";
 
   runTestsBtn.disabled = true;
   runTestsBtn.classList.add("running");
   runTestsBtn.textContent = "Running...";
-  testsStatusEl.textContent = "Running Digital.jar per-row...";
+  testsStatusEl.textContent = `Starting ${mode === "per_row" ? "per-row" : "general"} run...`;
   testsStatusEl.className = "tests-status muted";
   testsResultsEl.innerHTML = "";
   testsResultsEl.classList.add("empty");
-  logEvent("tests_run_started", { filename: file.filename });
+  showProgress("starting...");
+  logEvent("tests_run_started", { filename: file.filename, mode });
 
   let res;
   try {
-    res = await fetch("/api/tests", {
+    res = await fetch("/api/tests/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         session_id: sessionId,
         filename: file.filename,
+        mode,
       }),
     });
   } catch (err) {
+    finishTestsButton();
+    hideProgress();
     setTestsWarning(`Network error: ${err}`);
-    runTestsBtn.disabled = false;
-    runTestsBtn.classList.remove("running");
-    runTestsBtn.textContent = "Run tests";
     return;
   }
-  runTestsBtn.disabled = false;
-  runTestsBtn.classList.remove("running");
-  runTestsBtn.textContent = "Run tests";
 
   if (!res.ok) {
+    finishTestsButton();
+    hideProgress();
     const text = await res.text();
     setTestsWarning(`Server error ${res.status}: ${text}`);
     return;
   }
-
   const payload = await res.json();
+
+  if (payload.mode === "general") {
+    finishTestsButton();
+    hideProgress();
+    finalizeTests(payload, file, "general");
+    return;
+  }
+
+  const jobId = payload.job_id;
+  await pollJob(jobId, file);
+});
+
+async function pollJob(jobId, file) {
+  while (true) {
+    await new Promise((r) => setTimeout(r, 400));
+    let res;
+    try {
+      res = await fetch(`/api/tests/progress/${jobId}`);
+    } catch (err) {
+      finishTestsButton();
+      hideProgress();
+      setTestsWarning(`Network error polling job: ${err}`);
+      return;
+    }
+    if (!res.ok) {
+      finishTestsButton();
+      hideProgress();
+      const t = await res.text();
+      setTestsWarning(`Job lookup failed: ${t}`);
+      return;
+    }
+    const snap = await res.json();
+    const pct = snap.total_rows
+      ? Math.floor((snap.done_rows * 100) / snap.total_rows)
+      : 0;
+    showProgress(
+      snap.total_rows
+        ? `${pct}% (${snap.done_rows}/${snap.total_rows} rows)`
+        : "starting..."
+    );
+    if (snap.finished) {
+      finishTestsButton();
+      hideProgress();
+      finalizeTests(snap, file, "per_row");
+      return;
+    }
+  }
+}
+
+function finishTestsButton() {
+  runTestsBtn.disabled = false;
+  runTestsBtn.classList.remove("running");
+  runTestsBtn.textContent = "Run tests";
+}
+
+function showProgress(text) {
+  testsProgressTextEl.textContent = text;
+  testsProgressEl.classList.remove("hidden");
+}
+function hideProgress() {
+  testsProgressEl.classList.add("hidden");
+}
+
+function finalizeTests(payload, file, mode) {
   logEvent("tests_run_complete", {
     filename: file.filename,
+    mode,
     ok: payload.ok,
     all_passed: payload.all_passed,
   });
@@ -693,21 +761,30 @@ runTestsBtn.addEventListener("click", async () => {
     setTestsWarning(payload.warning || "Test runner reported an error.");
     return;
   }
-  if (payload.warning) {
-    setTestsWarning(payload.warning);
-  }
-
   if ((payload.specs || []).length === 0) {
     testsStatusEl.textContent = "No Testcase elements were found.";
     testsStatusEl.className = "tests-status muted";
     return;
   }
+  if (payload.warning) {
+    testsStatusEl.textContent = `Warning: ${payload.warning}`;
+    testsStatusEl.className = "tests-status warning";
+  } else {
+    const allPassed = payload.all_passed === true;
+    testsStatusEl.textContent = allPassed ? "All rows passed." : "Some rows did not pass.";
+    testsStatusEl.className = allPassed ? "tests-status passed" : "tests-status failed";
+  }
 
-  renderTestResults(payload);
+  if (mode === "general") {
+    renderGeneralResults(payload);
+  } else {
+    renderTestResults(payload);
+  }
+
   testsPassed = payload.all_passed === true;
   updateTestsStatus();
   if (loaded[currentIdx]) renderIssues(loaded[currentIdx]);
-});
+}
 
 function setTestsWarning(msg) {
   testsStatusEl.textContent = `Warning: ${msg}`;
@@ -718,26 +795,66 @@ function setTestsWarning(msg) {
 
 function renderTestResults(payload) {
   testsResultsEl.classList.remove("empty");
-  const allPassed = payload.all_passed === true;
-  testsStatusEl.textContent = allPassed ? "All rows passed." : "Some rows did not pass.";
-  testsStatusEl.className = allPassed ? "tests-status passed" : "tests-status failed";
 
   const html = payload.specs.map((spec) => {
+    const headers = spec.headers || [];
+    const headerCells =
+      `<td class="row-idx">idx</td>` +
+      headers.map((h) => `<td>${escapeHtml(h)}</td>`).join("") +
+      `<td class="row-status">status</td>`;
+
     const rowsHtml = spec.rows.map((row) => {
-      const errCell = row.error_message
-        ? `<td class="row-err" colspan="2">${escapeHtml(row.error_message)}</td>`
-        : `<td class="row-raw">${escapeHtml(row.raw)}</td><td class="row-status">${escapeHtml(row.status)}</td>`;
+      const idxCell = `<td class="row-idx">${row.index}</td>`;
+      if (row.error_message) {
+        const span = headers.length + 1;
+        return `<tr class="${escapeHtml(row.status)}">
+          ${idxCell}
+          <td class="row-err" colspan="${span}">${escapeHtml(row.error_message)}</td>
+        </tr>`;
+      }
+      const tokens = (row.raw || "").split(/\s+/).filter(Boolean);
+      const tokenCells = headers.map((_, i) =>
+        `<td>${escapeHtml(tokens[i] ?? "")}</td>`
+      ).join("");
       return `<tr class="${escapeHtml(row.status)}">
-        <td class="row-idx">${row.index}</td>
-        ${errCell}
+        ${idxCell}
+        ${tokenCells}
+        <td class="row-status">${escapeHtml(row.status)}</td>
       </tr>`;
     }).join("");
+
     return `
       <div class="spec-title">${escapeHtml(spec.name)} &middot; ${spec.rows.length} row${spec.rows.length === 1 ? "" : "s"}</div>
-      <table>${rowsHtml}</table>
+      <table>
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
     `;
   }).join("");
   testsResultsEl.innerHTML = html;
+}
+
+function renderGeneralResults(payload) {
+  testsResultsEl.classList.remove("empty");
+  const html = payload.specs.map((spec) => {
+    const headline = renderGeneralHeadline(spec);
+    return `<div class="spec-title">${escapeHtml(spec.name)} &middot; ${spec.row_count} row${spec.row_count === 1 ? "" : "s"}</div>
+            <div class="spec-headline">${headline}</div>`;
+  }).join("");
+  testsResultsEl.innerHTML = html;
+}
+
+function renderGeneralHeadline(spec) {
+  if (spec.status === "error") {
+    return `<span class="neutral">runner could not match this testcase</span>`;
+  }
+  const pp = spec.pass_pct ?? 0;
+  const fp = spec.fail_pct ?? 0;
+  const parts = [];
+  if (pp > 0) parts.push(`<span class="pct-pass">${pp}% passed</span>`);
+  if (fp > 0) parts.push(`<span class="pct-fail">${fp}% failed</span>`);
+  if (parts.length === 0) parts.push(`<span class="neutral">no rows reported</span>`);
+  return parts.join(" &middot; ");
 }
 
 async function refreshJarChip() {
@@ -790,9 +907,14 @@ jarBrowseBtn.addEventListener("click", async () => {
     jarPathInput.value = info.path;
     jarModalMsg.textContent = `Selected: ${info.path}. Click Save to persist.`;
     jarModalMsg.className = "modal-msg ok";
+    return;
+  }
+  const reason = (info.reason || "").toLowerCase();
+  if (reason.includes("cancel")) {
+    jarModalMsg.textContent = "";
+    jarModalMsg.className = "modal-msg";
   } else {
-    jarModalMsg.textContent =
-      `Browse unavailable (${info.reason || "no reason"}). Paste the path into the field above instead.`;
+    jarModalMsg.textContent = `Browse unavailable (${info.reason || "no reason"}).`;
     jarModalMsg.className = "modal-msg warn";
   }
 });
@@ -844,3 +966,37 @@ llmStubBtn.addEventListener("click", async () => {
 });
 
 refreshJarChip();
+
+// Tab switching
+
+const tabButtons = document.querySelectorAll(".tabs .tab");
+const pages = document.querySelectorAll(".page");
+
+function showTab(name) {
+  tabButtons.forEach((b) => {
+    b.classList.toggle("active", b.dataset.tab === name);
+  });
+  pages.forEach((p) => {
+    if (p.dataset.page === name) {
+      p.removeAttribute("hidden");
+    } else {
+      p.setAttribute("hidden", "");
+    }
+  });
+  if (name === "main" && cy) {
+    setTimeout(() => { try { cy.resize(); cy.fit(undefined, 60); } catch {} }, 0);
+  }
+  logEvent("tab_switch", { tab: name });
+}
+
+tabButtons.forEach((b) => {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+});
+
+function returnToMain() { showTab("main"); }
+
+fileInput.addEventListener("change", () => returnToMain());
+fileSelect.addEventListener("change", () => returnToMain());
+prevBtn.addEventListener("click", () => returnToMain());
+nextBtn.addEventListener("click", () => returnToMain());
+clearBtn.addEventListener("click", () => returnToMain());

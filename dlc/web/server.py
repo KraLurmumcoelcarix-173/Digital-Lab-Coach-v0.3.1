@@ -12,7 +12,7 @@ Endpoints:
   GET  /api/config/jar         current Digital.jar path 
   POST /api/config/jar         set Digital.jar path
   GET  /api/config/jar/browse  open the native file picker on the server 
-  
+
   POST /api/tests              run per-row tests 
   POST /api/llm/explain        Layer 3. 
 """
@@ -34,7 +34,10 @@ from dlc.testing.config import (
     set_digital_jar_path,
     prompt_for_jar_path,
 )
-from dlc.testing.runner import find_digital_jar, per_row_run
+from dlc.testing.results import parse_cli_output
+from dlc.testing.runner import (
+    find_digital_jar, per_row_run, per_row_run_iter, run_digital_cli,
+)
 from dlc.testing.spec import extract_test_specs
 from dlc.web.graph_export import circuit_summary, to_cytoscape
 
@@ -55,6 +58,12 @@ class TestsRequest(BaseModel):
     session_id: str
     filename: str
     timeout: float = 30.0
+    mode: str = "per_row"   
+
+import threading
+
+_JOBS: dict[str, dict] = {}
+_JOBS_LOCK = threading.Lock()
 
 
 @app.get("/")
@@ -154,6 +163,212 @@ async def circuit(files: list[UploadFile] = File(...)) -> dict:
             })
 
     return {"session_id": session_id, "files": results}
+
+def _resolve_target(session_id: str, filename: str) -> dict:
+    session = _SESSIONS.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    target = next(
+        (f for f in session["files"] if f["name"] == filename), None
+    )
+    if target is None:
+        raise HTTPException(
+            status_code=404, detail=f"File {filename!r} not in session"
+        )
+    return target
+
+
+def _run_general(target: dict, timeout: float) -> dict:
+    try:
+        circuit = parse_dig_file(target["path"])
+    except Exception as exc:
+        return {
+            "ok": False, "warning": f"Parse failed: {exc}",
+            "mode": "general", "specs": [], "all_passed": None,
+        }
+    specs = extract_test_specs(circuit)
+    if not specs:
+        return {
+            "ok": True, "warning": None, "mode": "general",
+            "specs": [], "all_passed": None,
+        }
+    jar_path = find_digital_jar()
+    if jar_path is None:
+        return {
+            "ok": False, "mode": "general",
+            "warning": "Digital.jar not configured. Open the jar picker.",
+            "specs": [], "all_passed": None,
+        }
+    code, output = run_digital_cli(target["path"], jar_path, timeout=timeout)
+    if code < 0:
+        msg = {
+            -1: "Digital CLI timed out",
+            -2: "java not on PATH",
+        }.get(code, f"Runner error: {output}")
+        return {
+            "ok": False, "warning": msg,
+            "mode": "general", "specs": [], "all_passed": None,
+        }
+    run = parse_cli_output(output)
+    by_name = run.by_name()
+    spec_payloads = []
+    any_failed = False
+    for spec in specs:
+        tc = by_name.get(spec.name)
+        if tc is None and len(run.testcases) == 1:
+            tc = run.testcases[0]
+        if tc is None:
+            spec_payloads.append({
+                "name": spec.name,
+                "status": "error",
+                "pass_pct": None,
+                "fail_pct": None,
+                "row_count": len(spec.rows),
+            })
+            any_failed = True
+            continue
+        if tc.status == "passed":
+            pass_pct = 100
+            fail_pct = 0
+        else:
+            fail_pct = tc.fail_pct or 0
+            pass_pct = 100 - fail_pct
+            any_failed = True
+        spec_payloads.append({
+            "name": spec.name,
+            "status": tc.status,
+            "pass_pct": pass_pct,
+            "fail_pct": fail_pct,
+            "row_count": len(spec.rows),
+        })
+    return {
+        "ok": True, "warning": None, "mode": "general",
+        "specs": spec_payloads, "all_passed": not any_failed,
+    }
+
+
+def _run_per_row_job(job_id: str, target: dict, timeout: float) -> None:
+    def write(updates: dict) -> None:
+        with _JOBS_LOCK:
+            _JOBS[job_id].update(updates)
+
+    try:
+        circuit = parse_dig_file(target["path"])
+    except Exception as exc:
+        write({
+            "ok": False, "finished": True,
+            "warning": f"Could not parse circuit for testing: {exc}",
+            "all_passed": None,
+        })
+        return
+    specs = extract_test_specs(circuit)
+    if not specs:
+        write({
+            "ok": True, "finished": True, "warning": None,
+            "all_passed": None,
+        })
+        return
+    jar_path = find_digital_jar()
+    if jar_path is None:
+        write({
+            "ok": False, "finished": True,
+            "warning": (
+                "Digital.jar not configured. Open the jar picker from "
+                "the toolbar to select it."
+            ),
+            "all_passed": None,
+        })
+        return
+
+    total = sum(len(s.rows) for s in specs)
+    with _JOBS_LOCK:
+        _JOBS[job_id]["total_rows"] = total
+        _JOBS[job_id]["specs"] = [
+            {"name": s.name, "headers": s.headers, "rows": []}
+            for s in specs
+        ]
+
+    any_failed = False
+    any_runner_error = False
+    done = 0
+
+    for spec_idx, spec in enumerate(specs):
+        rows_by_idx = {row.line_index: row for row in spec.rows}
+        try:
+            for row_result in per_row_run_iter(
+                spec, target["path"], jar_path=jar_path, timeout=timeout,
+            ):
+                row = rows_by_idx.get(row_result.row_index)
+                row_payload = {
+                    "index": row_result.row_index,
+                    "raw": row.raw if row else "",
+                    "status": row_result.status,
+                    "error_message": row_result.error_message,
+                }
+                if row_result.status == "failed":
+                    any_failed = True
+                if row_result.status == "error":
+                    any_runner_error = True
+                done += 1
+                with _JOBS_LOCK:
+                    _JOBS[job_id]["specs"][spec_idx]["rows"].append(row_payload)
+                    _JOBS[job_id]["done_rows"] = done
+        except Exception as exc:
+            write({
+                "ok": False, "finished": True,
+                "warning": f"Test runner crashed: {type(exc).__name__}: {exc}",
+                "all_passed": None,
+            })
+            return
+
+    write({
+        "ok": True, "finished": True,
+        "warning": (
+            "One or more rows could not be run (see status=error)."
+            if any_runner_error else None
+        ),
+        "all_passed": (not any_failed) and (not any_runner_error),
+    })
+
+@app.post("/api/tests/start")
+def tests_start(req: TestsRequest) -> dict:
+    target = _resolve_target(req.session_id, req.filename)
+
+    if req.mode == "general":
+        return _run_general(target, req.timeout)
+
+    job_id = uuid.uuid4().hex
+    with _JOBS_LOCK:
+        _JOBS[job_id] = {
+            "ok": True, "finished": False,
+            "warning": None, "all_passed": None,
+            "done_rows": 0, "total_rows": 0,
+            "specs": [], "mode": "per_row",
+        }
+    threading.Thread(
+        target=_run_per_row_job,
+        args=(job_id, target, req.timeout),
+        daemon=True,
+    ).start()
+    return {"job_id": job_id, "mode": "per_row"}
+
+
+@app.get("/api/tests/progress/{job_id}")
+def tests_progress(job_id: str) -> dict:
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {
+            "ok": job["ok"],
+            "finished": job["finished"],
+            "warning": job["warning"],
+            "all_passed": job["all_passed"],
+            "done_rows": job["done_rows"],
+            "total_rows": job["total_rows"],
+            "specs": job["specs"],
+            "mode": job.get("mode", "per_row"),
+        }
 
 @app.post("/api/tests")
 def run_tests(req: TestsRequest) -> dict:

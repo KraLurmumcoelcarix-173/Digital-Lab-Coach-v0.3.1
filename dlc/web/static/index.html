@@ -11,7 +11,14 @@
   </head>
   <body>
     <header>
-      <h1>Digital Lab Coach</h1>
+      <div class="brand-and-tabs">
+        <h1>Digital Lab Coach</h1>
+        <nav class="tabs">
+          <button class="tab active" data-tab="main">Dashboard</button>
+          <button class="tab" data-tab="l2">L2 Library</button>
+          <button class="tab" data-tab="l3">L3 Coach</button>
+        </nav>
+      </div>
       <div class="toolbar">
         <label for="file-input" class="btn">Add .dig</label>
         <input id="file-input" type="file" accept=".dig" multiple />
@@ -27,57 +34,88 @@
       </div>
     </header>
 
-    <main>
-      <section id="graph-pane">
-        <div id="cy"></div>
-        <div id="placeholder" class="placeholder">
-          No circuit loaded. Add a <code>.dig</code> file from the toolbar
-          above &mdash; multiple files (parent + subcircuits) supported.
+      <main>
+      <!-- Main dashboard page -->
+      <div class="page" data-page="main">
+        <section id="graph-pane">
+          <div id="cy"></div>
+          <div id="placeholder" class="placeholder">
+            No circuit loaded. Add a <code>.dig</code> file from the toolbar
+            above &mdash; multiple files (parent + subcircuits) supported.
+          </div>
+          <div id="hover-popup" class="hover-popup hidden">
+            <div class="hover-popup-title" id="hover-popup-title">&nbsp;</div>
+            <div class="hover-popup-body" id="hover-popup-body"></div>
+          </div>
+        </section>
+
+        <aside id="summary-pane">
+          <div class="sidebar-scroll">
+            <section class="sidebar-section">
+              <div class="issues-header">
+                <h2>Layer 1 issues <span id="issues-counts" class="muted">&mdash;</span></h2>
+                <label class="mute-toggle" title="When tests pass and a file has 3 or fewer issues, collapse them to avoid noise.">
+                  <input type="checkbox" id="mute-toggle" checked />
+                  <span>Mute when tests pass</span>
+                </label>
+              </div>
+              <div id="issues-list" class="muted">No file loaded.</div>
+            </section>
+
+            <section class="sidebar-section">
+              <div class="section-head">
+                <h2>Tests</h2>
+                <div class="tests-controls">
+                  <label class="perrow-toggle"
+                         title="Per-row mode runs Digital one row at a time so a single failing row can be pin-pointed. For files with 100+ tests the run can take several minutes. If you only need to know which rows failed, switch to general mode and ask the L3 Coach for a per-row analysis later.">
+                    <input type="checkbox" id="perrow-toggle" checked />
+                    <span>Per-row result</span>
+                  </label>
+                  <button id="run-tests-btn" class="btn-tests" disabled>Run tests</button>
+                </div>
+              </div>
+              <div id="tests-status" class="tests-status muted">No file loaded.</div>
+              <div id="tests-progress" class="tests-progress hidden">
+                <div class="spinner"></div>
+                <div id="tests-progress-text">starting...</div>
+              </div>
+              <div id="tests-results" class="tests-results"></div>
+            </section>
+
+            <section class="sidebar-section">
+              <h2>Circuit summary</h2>
+              <div id="summary" class="muted">No file loaded.</div>
+            </section>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Layer 2 library tab -->
+      <div class="page" data-page="l2" hidden>
+        <div class="tab-empty">
+          <h2>L2 Library</h2>
+          <p class="muted">
+            COMP 311 component encyclopedia and conceptual hints will live
+            here. Currently empty &mdash; content lands when the static
+            knowledge base + F12 are wired.
+          </p>
         </div>
-        <div id="hover-popup" class="hover-popup hidden">
-          <div class="hover-popup-title" id="hover-popup-title">&nbsp;</div>
-          <div class="hover-popup-body" id="hover-popup-body"></div>
+      </div>
+
+      <!-- Layer 3 coach tab -->
+      <div class="page" data-page="l3" hidden>
+        <div class="tab-l3">
+          <h2>Layer 3 coach <span class="pill">soon</span></h2>
+          <p class="muted">
+            Ask the coach to explain a failing row, suggest a hidden
+            test, or read the structural facts back in COMP 311
+            vocabulary. Reserved for F11&ndash;F13. The plumbing already
+            calls <code>POST /api/llm/explain</code>; that endpoint
+            returns 501 until the SDK + prompts land.
+          </p>
+          <button id="llm-stub-btn" class="btn-ghost">Try Explain (returns 501 today)</button>
         </div>
-      </section>
-
-      <aside id="summary-pane">
-        <div class="sidebar-scroll">
-          <section class="sidebar-section">
-            <div class="issues-header">
-              <h2>Layer 1 issues <span id="issues-counts" class="muted">&mdash;</span></h2>
-              <label class="mute-toggle" title="When tests pass and a file has 3 or fewer issues, collapse them to avoid noise.">
-                <input type="checkbox" id="mute-toggle" checked />
-                <span>Mute when tests pass</span>
-              </label>
-            </div>
-            <div id="issues-list" class="muted">No file loaded.</div>
-          </section>
-
-          <section class="sidebar-section">
-            <div class="section-head">
-              <h2>Tests</h2>
-              <button id="run-tests-btn" class="btn-tests" disabled>Run tests</button>
-            </div>
-            <div id="tests-status" class="tests-status muted">No file loaded.</div>
-            <div id="tests-results" class="tests-results"></div>
-          </section>
-
-          <section class="sidebar-section">
-            <h2>Circuit summary</h2>
-            <div id="summary" class="muted">No file loaded.</div>
-          </section>
-
-          <section class="sidebar-section l3-placeholder">
-            <h2>Layer 3 coach <span class="pill">soon</span></h2>
-            <p class="muted">
-              Ask the coach to explain a failing row, suggest a hidden
-              test, or read the structural facts back in COMP 311
-              vocabulary. Reserved for F11&ndash;F13.
-            </p>
-            <button id="llm-stub-btn" class="btn-ghost" disabled>Explain (not yet wired)</button>
-          </section>
-        </div>
-      </aside>
+      </div>
 
       <div id="jar-modal" class="modal hidden">
         <div class="modal-card">
@@ -89,6 +127,7 @@
           <label for="jar-path-input" style="font-size:12px;color:var(--muted);">Path to Digital.jar</label>
           <input id="jar-path-input" type="text" class="text-input"
                  placeholder="C:\path\to\Digital.jar" />
+          <p class="jar-tip muted">Tip: if Browse doesn&apos;t open a native picker, paste the path manually.</p>
           <div class="modal-row">
             <button id="jar-browse-btn" class="btn-ghost">Browse...</button>
             <div class="modal-spacer"></div>
