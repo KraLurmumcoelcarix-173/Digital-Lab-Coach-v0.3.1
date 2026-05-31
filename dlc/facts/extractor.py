@@ -97,7 +97,7 @@ class NetFact:
 class BugFact:
     """One structurally-detectable issue."""
     kind: str   # "dangling_input" | "multi_driver" | "combinational_cycle"
-                # | "width_conflict" | "missing_subcircuit"
+                # | "width_conflict" | "missing_subcircuit" | "empty_rom"
     description: str
     net_id: int | None = None
     component_indices: list[int] = field(default_factory=list)
@@ -470,6 +470,28 @@ def _collect_bugs(
         ))
 
     _collect_missing_subcircuits_recursive(circuit, bugs, chain=[])
+
+    for idx, comp in enumerate(circuit.components):
+        if comp.element_name != "ROM":
+            continue
+        data = comp.attributes.get("Data", "")
+        if not isinstance(data, str):
+            data = "" if data is None else str(data)
+        if data.strip():
+            continue
+        bugs.append(BugFact(
+            kind="empty_rom",
+            description=(
+                f"ROM at index {idx} has no Data programmed; all reads "
+                f"will return 0"
+            ),
+            component_indices=[idx],
+            detail={
+                "component_index": idx,
+                "label": comp.label,
+                "position": [comp.position.x, comp.position.y],
+            },
+        ))
 
     return bugs
 

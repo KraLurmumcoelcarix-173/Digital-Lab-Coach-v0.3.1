@@ -31,7 +31,7 @@ Last updated: 2026/5/23
 | `Multiplexer` | Mux | `Selector Bits` (default 1 → 2-to-1), `Bits` |
 | `Splitter` | Bus split/merge | `Input Splitting`, `Output Splitting`, `splitterSpreading` |
 | `Tunnel` | Named net | `NetName`. Tunnels sharing a NetName are electrically connected. Can have `rotation` |
-| `ROM` | Read-only memory | `Bits` (data width), `AddrBits`, `Data` (hex bytes), `isProgramMemory`, `bigEndian` |
+| `ROM` | Read-only memory | `Bits` (data width), `AddrBits`, `Data` (hex bytes), `isProgramMemory`, `bigEndian`. DLC flags an empty `Data` field as `empty_rom` (warning) |
 | `Register` | Sequential register | `Bits`, optional `isProgramCounter` |
 | `Const` | Constant value | `Value` (int), `Bits` |
 | `Ground`, `VDD` | Power rails | Single output pin. Can have `rotation`, `Bits` |
