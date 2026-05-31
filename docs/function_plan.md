@@ -24,23 +24,23 @@
 
 | # | Name | Status |
 |---|---|:-:|
-| F11 | LLM client wrapper (SDK, prompt versioning, cost tracking etc.) | TBD |
-| F12 | Conceptual explanation generator | TBD |
-| F13 | Prompt-leakage guard | TBD |
+| F11 | LLM client wrapper (SDK, prompt versioning, cost tracking etc.) | Done |
+| F12 | Conceptual explanation generator | Done |
+| F13 | Prompt-leakage guard | Done |
 
 ## Layer 3 LLM strategic debugging
 
 | # | Name | Status |
 |---|---|:-:|
-| F14 | Failed-test interpreter | TBD |
-| F15 | Test-writing coach | TBD |
+| F14 | Failed-test interpreter | Done |
+| F15 | Test-writing coach | Done |
 | F16 | Signal-flow narrator | TBD |
 
 ## Research infrastructure
 
 | # | Name | Status |
 |---|---|:-:|
-| F17 | UI design | TBD |
+| F17 | UI design | Ongoing |
 | F18 | Ablation condition controller | TBD |
 | F19 | Telemetry logger | TBD |
 | F20 | Digital source-code dig (Path-3 plugin viability) | TBD |

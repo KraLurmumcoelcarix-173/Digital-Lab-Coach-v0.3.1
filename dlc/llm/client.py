@@ -12,7 +12,7 @@ except ImportError:
     _ANTHROPIC_AVAILABLE = False
 
 
-DEFAULT_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_MAX_TOKENS = 2000
 
 
