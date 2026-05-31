@@ -102,6 +102,21 @@ const jarSaveBtn    = document.getElementById("jar-save-btn");
 const jarCancelBtn  = document.getElementById("jar-cancel-btn");
 const jarModalMsg   = document.getElementById("jar-modal-msg");
 const llmStubBtn    = document.getElementById("llm-stub-btn");
+const keyChipBtn    = document.getElementById("key-chip");
+const keyStateEl    = document.getElementById("key-state");
+const keyModal      = document.getElementById("key-modal");
+const keyInput      = document.getElementById("key-input");
+const keySaveBtn    = document.getElementById("key-save-btn");
+const keyCancelBtn  = document.getElementById("key-cancel-btn");
+const keyModalMsg   = document.getElementById("key-modal-msg");
+const libraryGridEl = document.getElementById("library-grid");
+const cardOverlay   = document.getElementById("card-overlay");
+const cardDetail    = document.getElementById("card-detail");
+const goalTextarea  = document.getElementById("goal-textarea");
+const goalCountEl   = document.getElementById("goal-count");
+const l2LlmBtn      = document.getElementById("l2-llm-btn");
+const l2LlmStatus   = document.getElementById("l2-llm-status");
+const l2LlmOutput   = document.getElementById("l2-llm-output");
 
 let sessionId = null;
 
@@ -982,6 +997,291 @@ llmStubBtn.addEventListener("click", async () => {
 
 refreshJarChip();
 
+async function refreshKeyChip() {
+  let info;
+  try {
+    const r = await fetch("/api/config/api_key");
+    info = await r.json();
+  } catch {
+    keyStateEl.innerHTML = `<span class="jar-state-unknown">unknown</span>`;
+    return;
+  }
+  if (info.configured) {
+    keyStateEl.innerHTML = `<span class="jar-state-good">set</span>`;
+    keyChipBtn.title = "Anthropic API key configured";
+  } else {
+    keyStateEl.innerHTML = `<span class="jar-state-missing">missing</span>`;
+    keyChipBtn.title = "Click to set your Anthropic API key";
+  }
+}
+refreshKeyChip();
+
+keyChipBtn.addEventListener("click", () => {
+  keyInput.value = "";
+  keyModalMsg.textContent = "";
+  keyModalMsg.className = "modal-msg";
+  keyModal.classList.remove("hidden");
+  setTimeout(() => keyInput.focus(), 50);
+});
+keyCancelBtn.addEventListener("click", () => keyModal.classList.add("hidden"));
+keySaveBtn.addEventListener("click", async () => {
+  const key = keyInput.value.trim();
+  if (!key) {
+    keyModalMsg.textContent = "Empty.";
+    keyModalMsg.className = "modal-msg err";
+    return;
+  }
+  let res;
+  try {
+    res = await fetch("/api/config/api_key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+  } catch (err) {
+    keyModalMsg.textContent = `Save failed: ${err}`;
+    keyModalMsg.className = "modal-msg err";
+    return;
+  }
+  if (!res.ok) {
+    const t = await res.text();
+    keyModalMsg.textContent = `Rejected: ${t}`;
+    keyModalMsg.className = "modal-msg err";
+    return;
+  }
+  keyModalMsg.textContent = "Saved.";
+  keyModalMsg.className = "modal-msg ok";
+  await refreshKeyChip();
+  setTimeout(() => keyModal.classList.add("hidden"), 500);
+});
+
+let l2LibraryFilename = null;  
+
+async function refreshLibrary() {
+  if (!sessionId || loaded.length === 0) {
+    libraryGridEl.innerHTML = `<div class="muted">Load a circuit on the Dashboard tab to populate the library.</div>`;
+    l2LibraryFilename = null;
+    return;
+  }
+  const file = loaded[currentIdx];
+  if (file.error) {
+    libraryGridEl.innerHTML = `<div class="muted">Could not parse this file; no library to show.</div>`;
+    return;
+  }
+  if (l2LibraryFilename === file.filename) return;
+
+  libraryGridEl.innerHTML = `<div class="muted">Loading library...</div>`;
+  let res;
+  try {
+    res = await fetch(`/api/library?session_id=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(file.filename)}`);
+  } catch (err) {
+    libraryGridEl.innerHTML = `<div style="color:#991b1b">Library fetch failed: ${escapeHtml(String(err))}</div>`;
+    return;
+  }
+  if (!res.ok) {
+    libraryGridEl.innerHTML = `<div style="color:#991b1b">Library error: ${res.status}</div>`;
+    return;
+  }
+  const data = await res.json();
+  renderLibrary(data.cards || []);
+  l2LibraryFilename = file.filename;
+}
+
+function renderLibrary(cards) {
+  if (cards.length === 0) {
+    libraryGridEl.innerHTML = `<div class="muted">No components in this circuit.</div>`;
+    return;
+  }
+  libraryGridEl.innerHTML = cards.map((c, i) => `
+    <div class="library-card" data-card-idx="${i}">
+      ${c.count > 1 ? `<span class="count">${c.count}</span>` : ""}
+      <img src="/static/images/components/${escapeHtml(c.image)}"
+           alt="${escapeHtml(c.display_name)}"
+           onerror="this.onerror=null;this.src='/static/images/components/placeholder.png';" />
+      <div class="name">${escapeHtml(c.display_name)}</div>
+    </div>
+  `).join("");
+  libraryGridEl.querySelectorAll(".library-card").forEach((el) => {
+    el.addEventListener("click", () => openCardDetail(cards[parseInt(el.dataset.cardIdx, 10)]));
+    el.addEventListener("mouseenter", () => openCardDetail(cards[parseInt(el.dataset.cardIdx, 10)]));
+  });
+}
+
+function openCardDetail(card) {
+  if (!card) return;
+  cardDetail.innerHTML = renderCardDetail(card);
+  cardOverlay.classList.remove("hidden");
+  cardDetail.focus({ preventScroll: true });
+  cardDetail.scrollTop = 0;
+}
+function closeCardDetail() {
+  cardOverlay.classList.add("hidden");
+  cardDetail.innerHTML = "";
+}
+cardOverlay.addEventListener("click", (e) => {
+  if (e.target === cardOverlay) closeCardDetail();
+});
+window.addEventListener("keydown", (e) => {
+  if (cardOverlay.classList.contains("hidden")) return;
+  if (e.key === "ArrowDown") {
+    cardDetail.scrollTop += 40; e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    cardDetail.scrollTop -= 40; e.preventDefault();
+  } else if (e.key === "PageDown") {
+    cardDetail.scrollTop += cardDetail.clientHeight - 30; e.preventDefault();
+  } else if (e.key === "PageUp") {
+    cardDetail.scrollTop -= cardDetail.clientHeight - 30; e.preventDefault();
+  } else if (e.key === "Escape") {
+    closeCardDetail(); e.preventDefault();
+  }
+});
+
+function renderCardDetail(card) {
+  const extra = card.extra || {};
+  const truth2 = (extra.truth_table_2 || []).length
+    ? `<h4>Truth table (2 inputs)</h4>` + renderTruthTable(extra.truth_table_2)
+    : "";
+  const truth3 = (extra.truth_table_3 || []).length
+    ? `<h4>Truth table (3 inputs)</h4>` + renderTruthTable(extra.truth_table_3)
+    : "";
+  const behaviour = extra.behavior_example
+    ? `<h4>Example behavior</h4><div class="behavior">${escapeHtml(extra.behavior_example)}</div>`
+    : "";
+  const note = card.transistor_note
+    ? `<p class="muted" style="font-size:11.5px;">${escapeHtml(card.transistor_note)}</p>`
+    : "";
+  return `
+    <div>
+      <img class="detail-img" src="/static/images/components/${escapeHtml(card.image)}"
+           alt="${escapeHtml(card.display_name)}"
+           onerror="this.onerror=null;this.src='/static/images/components/placeholder.png';" />
+    </div>
+    <div>
+      <div class="detail-head">
+        <div class="detail-name">${escapeHtml(card.display_name)}</div>
+        <div class="detail-meta">
+          <span class="pill-small">${escapeHtml(card.port_summary || "")}</span>
+          <span>transistors: ${escapeHtml(card.transistor_count || "?")}</span>
+        </div>
+      </div>
+      <div class="detail-body">
+        <p>${escapeHtml(card.description || "")}</p>
+        ${note}
+        ${truth2}
+        ${truth3}
+        ${behaviour}
+      </div>
+    </div>
+  `;
+}
+
+function renderTruthTable(rows) {
+  if (rows.length === 0) return "";
+  const inLen = rows[0].in.length;
+  const headers = [];
+  for (let i = 0; i < inLen; i++) headers.push(`<td>in${i}</td>`);
+  headers.push(`<td>out</td>`);
+  const body = rows.map((r) => {
+    const cls = r.out ? "true" : "false";
+    const cells = r.in.map((v) => `<td>${v}</td>`).join("");
+    return `<tr class="${cls}">${cells}<td class="out">${r.out}</td></tr>`;
+  }).join("");
+  return `<table class="truth-table"><thead><tr>${headers.join("")}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+goalTextarea.addEventListener("input", () => {
+  const words = (goalTextarea.value.trim().match(/\S+/g) || []).length;
+  goalCountEl.textContent = `${words} word${words === 1 ? "" : "s"}`;
+  goalCountEl.style.color = words > 200 ? "#b91c1c" : "";
+});
+
+l2LlmBtn.addEventListener("click", async () => {
+  if (!sessionId || loaded.length === 0) {
+    l2LlmStatus.textContent = "Load a circuit first.";
+    l2LlmStatus.className = "l2-llm-status error";
+    return;
+  }
+  const file = loaded[currentIdx];
+  if (file.error) {
+    l2LlmStatus.textContent = "Current file failed to parse.";
+    l2LlmStatus.className = "l2-llm-status error";
+    return;
+  }
+
+  const goal = goalTextarea.value.trim();
+  const words = (goal.match(/\S+/g) || []).length;
+  if (words > 200) {
+    l2LlmStatus.textContent = "Goal too long (200 word max).";
+    l2LlmStatus.className = "l2-llm-status error";
+    return;
+  }
+
+  let testSummary = null;
+  const slot = testState[file.filename];
+  if (slot && slot.status === "done" && slot.payload) {
+    if (slot.payload.all_passed === true) testSummary = "All rows passed.";
+    else if (slot.payload.all_passed === false) testSummary = "Some rows failed.";
+  }
+
+  l2LlmBtn.disabled = true;
+  l2LlmStatus.textContent = "Talking to Claude...";
+  l2LlmStatus.className = "l2-llm-status running";
+  l2LlmOutput.innerHTML = "";
+  l2LlmOutput.classList.add("empty");
+  logEvent("l2_llm_started", { filename: file.filename, has_goal: goal.length > 0 });
+
+  let res;
+  try {
+    res = await fetch("/api/llm/explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        filename: file.filename,
+        student_goal: goal || null,
+        test_summary: testSummary,
+      }),
+    });
+  } catch (err) {
+    l2LlmStatus.textContent = `Network error: ${err}`;
+    l2LlmStatus.className = "l2-llm-status error";
+    l2LlmBtn.disabled = false;
+    return;
+  }
+  l2LlmBtn.disabled = false;
+
+  if (!res.ok) {
+    const t = await res.text();
+    l2LlmStatus.textContent = `Server error ${res.status}: ${t}`;
+    l2LlmStatus.className = "l2-llm-status error";
+    return;
+  }
+  const payload = await res.json();
+  logEvent("l2_llm_complete", { filename: file.filename, ok: payload.ok, gated: !!payload.gate_message });
+
+  if (!payload.ok) {
+    l2LlmStatus.textContent = `Error: ${payload.error || "unknown"}`;
+    l2LlmStatus.className = "l2-llm-status error";
+    return;
+  }
+
+  if (payload.gate_message) {
+    l2LlmStatus.textContent = "Precheck blocked the summary.";
+    l2LlmStatus.className = "l2-llm-status gated";
+    l2LlmOutput.classList.remove("empty");
+    l2LlmOutput.textContent = payload.gate_message;
+    return;
+  }
+
+  l2LlmStatus.textContent = "Done.";
+  l2LlmStatus.className = "l2-llm-status done";
+  l2LlmOutput.classList.remove("empty");
+  const usage = payload.usage
+    ? `\n\n[${payload.model} - in:${payload.usage.input_tokens} out:${payload.usage.output_tokens} tokens]`
+    : "";
+  l2LlmOutput.innerHTML = `${escapeHtml(payload.text || "(empty response)")}<div class="usage">${escapeHtml(usage.trim())}</div>`;
+});
+
 // Tab switching
 
 const tabButtons = document.querySelectorAll(".tabs .tab");
@@ -1000,6 +1300,9 @@ function showTab(name) {
   });
   if (name === "main" && cy) {
     setTimeout(() => { try { cy.resize(); cy.fit(undefined, 60); } catch {} }, 0);
+  }
+  if (name === "l2") {
+    refreshLibrary();
   }
   logEvent("tab_switch", { tab: name });
 }
