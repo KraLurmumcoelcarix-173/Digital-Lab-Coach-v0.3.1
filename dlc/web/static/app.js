@@ -287,6 +287,10 @@ function renderCurrent() {
   renderIssues(f);
   renderTestsForFile(f);
   l2LibraryFilename = null;
+  l2LlmStatus.textContent = "";
+  l2LlmStatus.className = "l2-llm-status";
+  l2LlmOutput.innerHTML = "";
+  l2LlmOutput.classList.add("empty");
 }
 
 function renderGraph(graph) {
