@@ -4,6 +4,8 @@ A hybrid deterministic-checker + LLM feedback tool for student debugging
 in Digital circuit simulator labs. Path 1 (external
 companion tool) prototype. 
 
+![Dashboard view of tier3_calculator](docs/screenshots/dashboard.png)
+
 ## Status
 
 Active development.

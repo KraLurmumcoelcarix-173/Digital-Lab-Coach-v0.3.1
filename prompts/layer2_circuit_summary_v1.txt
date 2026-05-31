@@ -75,3 +75,4 @@ Rules:
 - Every claim about connectivity, bit widths, or component purpose must be grounded in the [CIRCUIT FACTS] block. If a fact is not stated there, do not assert it. When uncertain about a component's role in this specific circuit, describe its standard function and note "in this circuit, it appears to…" rather than asserting purpose.
 - A "subcircuit" means a component whose element_name ends in .dig, as listed in the facts. One short sentence per such instance, naming the subcircuit and what it computes from its inputs to its outputs. If there are no subcircuits, write exactly: "No subcircuits."
 - Do not have duplicate wordings such as "(Goal comparison) Goal comparison: ... "
+- For "Signal flow with example data", must use example data instead of using all text description for flow explanation.
