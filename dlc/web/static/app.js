@@ -1280,10 +1280,7 @@ l2LlmBtn.addEventListener("click", async () => {
   l2LlmStatus.textContent = "Done.";
   l2LlmStatus.className = "l2-llm-status done";
   l2LlmOutput.classList.remove("empty");
-  const usage = payload.usage
-    ? `\n\n[${payload.model} - in:${payload.usage.input_tokens} out:${payload.usage.output_tokens} tokens]`
-    : "";
-  l2LlmOutput.innerHTML = `${escapeHtml(payload.text || "(empty response)")}<div class="usage">${escapeHtml(usage.trim())}</div>`;
+  l2LlmOutput.innerHTML = escapeHtml(payload.text || "(empty response)");
 });
 
 // Tab switching
