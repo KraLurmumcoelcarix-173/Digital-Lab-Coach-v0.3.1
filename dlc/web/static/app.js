@@ -2,7 +2,16 @@
    uploads, renders signal-flow graph, drives summary + hover popup.
 */
 
-cytoscape.use(window.cytoscapeDagre);
+const GRAPH_LIBS_OK =
+  typeof cytoscape !== "undefined" && typeof window.cytoscapeDagre !== "undefined";
+if (GRAPH_LIBS_OK) {
+  cytoscape.use(window.cytoscapeDagre);
+} else {
+  console.error(
+    "DLC: graph libraries (cytoscape/dagre) failed to load from the CDN. " +
+    "The signal-flow graph is disabled, but the rest of the UI still works.",
+  );
+}
 
 const FAMILY_COLORS = {
   "io-in":      "#cfe5ff",
@@ -302,6 +311,17 @@ function renderCurrent() {
 
 function renderGraph(graph) {
   placeholder.classList.add("hidden");
+
+  if (!GRAPH_LIBS_OK) {
+    const box = document.getElementById("cy");
+    if (box) {
+      box.innerHTML =
+        `<div class="muted" style="padding:24px">Graph unavailable: the ` +
+        `cytoscape/dagre libraries did not load (network or CDN blocked). ` +
+        `Structural issues, tests, library, and the Layer 2 coach still work.</div>`;
+    }
+    return;
+  }
 
   if (cy) cy.destroy();
 
@@ -1023,26 +1043,26 @@ function _setKeyRowStatus(provider, configured) {
 }
 
 async function refreshKeyChip() {
-  let info;
   try {
     const r = await fetch("/api/config/api_key");
-    info = await r.json();
-  } catch {
+    const info = await r.json();
+    const per = info.providers || {};
+    for (const p of KEY_PROVIDERS) _setKeyRowStatus(p, per[p]);
+    const set = KEY_PROVIDERS.filter((p) => per[p]);
+    if (set.length === 0) {
+      keyStateEl.innerHTML = `<span class="jar-state-missing">missing</span>`;
+      keyChipBtn.title = "No LLM API keys configured. Click to add.";
+    } else if (set.length === KEY_PROVIDERS.length) {
+      keyStateEl.innerHTML = `<span class="jar-state-good">${set.length}/${KEY_PROVIDERS.length}</span>`;
+      keyChipBtn.title = "All providers configured.";
+    } else {
+      keyStateEl.innerHTML = `<span class="jar-state-good">${set.length}/${KEY_PROVIDERS.length}</span>`;
+      keyChipBtn.title = `Configured: ${set.join(", ")}`;
+    }
+  } catch (err) {
     keyStateEl.innerHTML = `<span class="jar-state-unknown">unknown</span>`;
-    return;
-  }
-  const per = info.providers || {};
-  for (const p of KEY_PROVIDERS) _setKeyRowStatus(p, per[p]);
-  const set = KEY_PROVIDERS.filter((p) => per[p]);
-  if (set.length === 0) {
-    keyStateEl.innerHTML = `<span class="jar-state-missing">missing</span>`;
-    keyChipBtn.title = "No LLM API keys configured. Click to add.";
-  } else if (set.length === KEY_PROVIDERS.length) {
-    keyStateEl.innerHTML = `<span class="jar-state-good">${set.length}/${KEY_PROVIDERS.length}</span>`;
-    keyChipBtn.title = "All providers configured.";
-  } else {
-    keyStateEl.innerHTML = `<span class="jar-state-good">${set.length}/${KEY_PROVIDERS.length}</span>`;
-    keyChipBtn.title = `Configured: ${set.join(", ")}`;
+    keyChipBtn.title = "Could not read API key status. Click to add a key.";
+    console.error("DLC: refreshKeyChip failed:", err);
   }
   await refreshModelCatalog();
 }
