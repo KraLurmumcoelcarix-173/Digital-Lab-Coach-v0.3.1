@@ -133,6 +133,9 @@ const goalCountEl   = document.getElementById("goal-count");
 const l2LlmBtn      = document.getElementById("l2-llm-btn");
 const l2LlmStatus   = document.getElementById("l2-llm-status");
 const l2LlmOutput   = document.getElementById("l2-llm-output");
+const graderSelect  = document.getElementById("grader-model-select");
+const gradeBody     = document.getElementById("grade-body");
+let lastGradedSummary = null;
 
 let sessionId = null;
 
@@ -218,6 +221,7 @@ function resetDashboard() {
   l2LlmStatus.textContent = "";
   l2LlmOutput.innerHTML = "";
   l2LlmOutput.classList.add("empty");
+  _resetGrade();
   hidePopup();
 }
 
@@ -1073,6 +1077,7 @@ async function refreshModelCatalog() {
     const d = await r.json();
     modelCatalog = d.models || [];
     populateModelSelect(d.default);
+    populateGraderSelect();
   } catch {
   }
 }
@@ -1103,6 +1108,38 @@ function populateModelSelect(defaultModel) {
   } else if (defaultModel) {
     l2ModelSelect.value = defaultModel;
   }
+}
+
+const GRADER_DEFAULT = "claude-sonnet-4-6";
+function populateGraderSelect() {
+  if (!graderSelect) return;
+  const byProvider = {};
+  for (const m of modelCatalog) {
+    (byProvider[m.provider] = byProvider[m.provider] || []).push(m);
+  }
+  const previous = graderSelect.value;
+  let html = "";
+  for (const provider of ["anthropic", "openai"]) {
+    const arr = byProvider[provider] || [];
+    if (arr.length === 0) continue;
+    html += `<optgroup label="${provider}">`;
+    for (const m of arr) {
+      const tag = m.key_configured ? "" : " (no key)";
+      html += `<option value="${m.id}" ${m.key_configured ? "" : "disabled"}>${m.label}${tag}</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  graderSelect.innerHTML = html;
+  const enabled = modelCatalog.filter((m) => m.key_configured).map((m) => m.id);
+  if (enabled.includes(previous)) graderSelect.value = previous;
+  else if (enabled.includes(GRADER_DEFAULT)) graderSelect.value = GRADER_DEFAULT;
+  else if (enabled.length > 0) graderSelect.value = enabled[0];
+}
+
+if (graderSelect) {
+  graderSelect.addEventListener("change", () => {
+    if (lastGradedSummary) gradeCurrentSummary(lastGradedSummary);
+  });
 }
 
 refreshKeyChip();
@@ -1468,7 +1505,137 @@ l2LlmBtn.addEventListener("click", async () => {
   l2LlmOutput.classList.remove("empty");
   l2LlmOutput.innerHTML = renderL2ParagraphCards(payload.text || "(empty response)");
   wireL2CardEvents();
+
+  // Grade the summary that was just shown.
+  if (payload.text) gradeCurrentSummary(payload.text);
 });
+
+// ---------- L2 summary grade: credibility donut + hover detail ----------
+const GRADE_COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4", "#f97316"];
+
+function _bandColor(band) {
+  return band === "green" ? "#16a34a" : band === "yellow" ? "#d97706" : "#dc2626";
+}
+function _polar(cx, cy, r, deg) {
+  const a = (deg - 90) * Math.PI / 180;
+  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+}
+function _arcPath(cx, cy, r, start, end) {
+  if (end - start >= 359.999) end = start + 359.999;
+  const [x1, y1] = _polar(cx, cy, r, start);
+  const [x2, y2] = _polar(cx, cy, r, end);
+  const large = end - start > 180 ? 1 : 0;
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+}
+
+function _resetGrade() {
+  lastGradedSummary = null;
+  if (gradeBody) {
+    gradeBody.innerHTML = `<div class="muted">Summarize a circuit to see its credibility grade out of 100.</div>`;
+  }
+}
+
+async function gradeCurrentSummary(summaryText) {
+  if (!gradeBody || !sessionId || loaded.length === 0) return;
+  const file = loaded[currentIdx];
+  if (!file || file.error) return;
+  lastGradedSummary = summaryText;
+  const graderModel = graderSelect ? graderSelect.value || null : null;
+
+  gradeBody.innerHTML =
+    `<span class="muted">Grading with ${escapeHtml(graderModel || "default")}` +
+    `<span class="llm-dots" aria-hidden="true"><i></i><i></i><i></i></span></span>`;
+
+  let res;
+  try {
+    res = await fetch("/api/llm/grade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        filename: file.filename,
+        summary_text: summaryText,
+        student_goal: goalTextarea.value.trim() || null,
+        grader_model: graderModel,
+      }),
+    });
+  } catch (err) {
+    gradeBody.innerHTML = `<span style="color:#b91c1c">Grade request failed: ${escapeHtml(String(err))}</span>`;
+    return;
+  }
+  let g;
+  try { g = await res.json(); } catch { g = null; }
+  if (!g || !g.ok) {
+    gradeBody.innerHTML = `<span style="color:#b91c1c">${escapeHtml((g && g.error) || ("Grader error " + res.status))}</span>`;
+    return;
+  }
+  renderGradeDonut(g);
+}
+
+function renderGradeDonut(g) {
+  const subs = g.sub_scores || [];
+  const cx = 80, cy = 80, r = 62, sw = 22, gap = 3;
+  let cursor = 0, arcs = "";
+  for (let i = 0; i < subs.length; i++) {
+    const s = subs[i];
+    const span = (s.max / 100) * 360;
+    const start = cursor + gap / 2;
+    const end = cursor + span - gap / 2;
+    const valEnd = start + (end - start) * (s.max ? s.score / s.max : 0);
+    const color = GRADE_COLORS[i % GRADE_COLORS.length];
+    arcs += `<path d="${_arcPath(cx, cy, r, start, end)}" stroke="${color}" stroke-opacity="0.18" stroke-width="${sw}" fill="none"></path>`;
+    if (valEnd > start + 0.2) {
+      arcs += `<path d="${_arcPath(cx, cy, r, start, valEnd)}" stroke="${color}" stroke-width="${sw}" fill="none"></path>`;
+    }
+    arcs += `<path class="grade-seg-hit" data-i="${i}" d="${_arcPath(cx, cy, r, start, end)}" stroke="transparent" stroke-width="${sw + 6}" fill="none"></path>`;
+    cursor += span;
+  }
+  const svg =
+    `<svg class="grade-donut" viewBox="0 0 160 160" role="img" aria-label="grade ${g.total} of 100">` +
+    arcs +
+    `<text class="grade-total" x="80" y="86" fill="${_bandColor(g.band)}">${g.total}</text>` +
+    `<text class="grade-outof" x="80" y="104">/ 100</text></svg>`;
+
+  let legend = `<div class="grade-legend">`;
+  for (let i = 0; i < subs.length; i++) {
+    const s = subs[i];
+    legend +=
+      `<div class="grade-legend-row" data-i="${i}">` +
+      `<span class="grade-swatch" style="background:${GRADE_COLORS[i % GRADE_COLORS.length]}"></span>` +
+      `<span class="lg-label">${escapeHtml(s.label)}</span>` +
+      `<span class="lg-src">${escapeHtml(s.source)}</span>` +
+      `<span class="lg-score">${s.score}/${s.max}</span></div>`;
+  }
+  legend += `</div>`;
+
+  const note = g.capped
+    ? `<div class="grade-note capped">Capped at ${g.total} - hallucinated: ${escapeHtml((g.hallucinated_items || []).join(", ") || "yes")}.</div>`
+    : "";
+  const meta = `<div class="grade-meta">Grader: ${escapeHtml(g.grader_model || "?")}${(g.raw_total != null && g.raw_total !== g.total) ? ` (raw ${g.raw_total})` : ""}</div>`;
+
+  gradeBody.innerHTML =
+    `<div class="grade-card">${svg}<div class="grade-info">${legend}` +
+    `<div class="grade-detail muted">Hover a slice or row for how it is graded.</div>${note}${meta}</div></div>`;
+
+  const detail = gradeBody.querySelector(".grade-detail");
+  const show = (i) => {
+    const s = subs[i];
+    if (!s) return;
+    detail.classList.remove("muted");
+    detail.innerHTML =
+      `<div class="gd-title">${escapeHtml(s.label)} - ${s.score}/${s.max} <span class="lg-src">${escapeHtml(s.source)}</span></div>` +
+      `<div class="gd-how">${escapeHtml(s.description || "")}</div>` +
+      (s.rationale ? `<div class="gd-why">"${escapeHtml(s.rationale)}"</div>` : "");
+  };
+  const reset = () => {
+    detail.classList.add("muted");
+    detail.textContent = "Hover a slice or row for how it is graded.";
+  };
+  gradeBody.querySelectorAll(".grade-seg-hit, .grade-legend-row").forEach((el) => {
+    el.addEventListener("mouseenter", () => show(parseInt(el.dataset.i, 10)));
+    el.addEventListener("mouseleave", reset);
+  });
+}
 
 const L2_CARD_TYPES = [
   { key: "purpose", name: "Overall purpose",     hint: "What this circuit does." },
