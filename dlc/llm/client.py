@@ -139,6 +139,10 @@ def _call_anthropic(prompt, model, key, max_tokens, system) -> dict:
             "usage": None, "model": model}
 
 
+def _is_openai_reasoning_model(model: str) -> bool:
+    return model.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
 def _call_openai(prompt, model, key, max_tokens, system) -> dict:
     if not _OPENAI_AVAILABLE:
         return {"ok": False, "text": None,
@@ -148,21 +152,33 @@ def _call_openai(prompt, model, key, max_tokens, system) -> dict:
     last_err = None
     for attempt in range(3):
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                max_completion_tokens=max_tokens,
-                messages=[
+            kwargs = {
+                "model": model,
+                "max_completion_tokens": max_tokens,
+                "messages": [
                     {"role": "system",
                      "content": system or "You are a helpful circuit reasoning assistant."},
                     {"role": "user", "content": prompt},
                 ],
-            )
-            text = resp.choices[0].message.content or ""
+            }
+            if _is_openai_reasoning_model(model):
+                kwargs["max_completion_tokens"] = max(max_tokens, 8000)
+                kwargs["reasoning_effort"] = "low"
+            resp = client.chat.completions.create(**kwargs)
+            text = (resp.choices[0].message.content or "").strip()
             usage = getattr(resp, "usage", None)
             usage_out = {
                 "input_tokens": getattr(usage, "prompt_tokens", 0) if usage else 0,
                 "output_tokens": getattr(usage, "completion_tokens", 0) if usage else 0,
             }
+            if not text:
+                finish = getattr(resp.choices[0], "finish_reason", None)
+                return {"ok": False, "text": None,
+                        "error": (f"{model} returned no visible text "
+                                  f"(finish_reason={finish}). For reasoning models this "
+                                  "usually means the token budget was spent on reasoning; "
+                                  "raise max_completion_tokens."),
+                        "usage": usage_out, "model": model}
             return {"ok": True, "text": text, "error": None,
                     "usage": usage_out, "model": model}
         except Exception as exc:

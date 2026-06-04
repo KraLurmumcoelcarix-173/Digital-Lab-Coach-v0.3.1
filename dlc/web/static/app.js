@@ -1227,25 +1227,76 @@ function renderLibrary(cards) {
     </div>
   `).join("");
   libraryGridEl.querySelectorAll(".library-card").forEach((el) => {
-    el.addEventListener("click", () => openCardDetail(cards[parseInt(el.dataset.cardIdx, 10)]));
-    el.addEventListener("mouseenter", () => openCardDetail(cards[parseInt(el.dataset.cardIdx, 10)]));
+    const card = cards[parseInt(el.dataset.cardIdx, 10)];
+    el.addEventListener("click", () => openCardDetail(card, { pinned: true }));
+    if (CARD_HOVER_CAPABLE) {
+      el.addEventListener("mouseenter", () => onCardHover(card));
+      el.addEventListener("mouseleave", scheduleCardClose);
+    }
   });
 }
 
-function openCardDetail(card) {
+const CARD_HOVER_CAPABLE =
+  !!(window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches);
+const CARD_OPEN_DELAY = 180;   
+const CARD_CLOSE_DELAY = 240; 
+let cardPinned = false;
+let cardOpenTimer = null;
+let cardCloseTimer = null;
+
+function _clearCardTimers() {
+  if (cardOpenTimer) { clearTimeout(cardOpenTimer); cardOpenTimer = null; }
+  if (cardCloseTimer) { clearTimeout(cardCloseTimer); cardCloseTimer = null; }
+}
+
+function onCardHover(card) {
+  if (cardPinned) return;                     
+  _clearCardTimers();
+  if (!cardOverlay.classList.contains("hidden")) {
+    openCardDetail(card, { pinned: false });    
+  } else {
+    cardOpenTimer = setTimeout(() => openCardDetail(card, { pinned: false }), CARD_OPEN_DELAY);
+  }
+}
+
+function scheduleCardClose() {
+  if (cardPinned) return;
+  _clearCardTimers();
+  cardCloseTimer = setTimeout(closeCardDetail, CARD_CLOSE_DELAY);
+}
+
+function openCardDetail(card, { pinned = false } = {}) {
   if (!card) return;
-  cardDetail.innerHTML = renderCardDetail(card);
+  _clearCardTimers();
+  cardPinned = pinned;
+  cardDetail.innerHTML =
+    `<button class="card-close" type="button" aria-label="Close">&times;</button>` +
+    renderCardDetail(card);
   cardOverlay.classList.remove("hidden");
-  cardDetail.focus({ preventScroll: true });
+  cardOverlay.classList.toggle("preview", !pinned); 
+  if (pinned) cardDetail.focus({ preventScroll: true });
   cardDetail.scrollTop = 0;
 }
+
 function closeCardDetail() {
+  _clearCardTimers();
+  cardPinned = false;
   cardOverlay.classList.add("hidden");
+  cardOverlay.classList.remove("preview");
   cardDetail.innerHTML = "";
 }
+
+cardDetail.addEventListener("mouseenter", () => { if (!cardPinned) _clearCardTimers(); });
+cardDetail.addEventListener("mouseleave", scheduleCardClose);
+
+cardDetail.addEventListener("click", (e) => {
+  if (e.target.closest(".card-close")) closeCardDetail();
+});
+
 cardOverlay.addEventListener("click", (e) => {
   if (e.target === cardOverlay) closeCardDetail();
 });
+
 window.addEventListener("keydown", (e) => {
   if (cardOverlay.classList.contains("hidden")) return;
   if (e.key === "ArrowDown") {
