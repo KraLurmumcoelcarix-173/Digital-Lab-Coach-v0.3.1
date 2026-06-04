@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from dlc.facts.extractor import extract_facts
 from dlc.llm import client as llm_client
 from dlc.llm.explain import explain_circuit
+from dlc.llm.grade import grade_summary
 
 from dlc.analyzer import check_all_l1
 from dlc.parser.dig_parser import parse_dig_file
@@ -78,6 +79,14 @@ class LlmExplainRequest(BaseModel):
     student_goal: str | None = None
     test_summary: str | None = None
     model: str | None = None
+
+class LlmGradeRequest(BaseModel):
+    session_id: str
+    filename: str
+    summary_text: str
+    student_goal: str | None = None
+    test_summary: str | None = None
+    grader_model: str | None = None
 
 import threading
 
@@ -582,6 +591,32 @@ def llm_explain(req: LlmExplainRequest) -> dict:
         test_summary=req.test_summary,
         student_goal=student_goal,
         model=req.model,
+    )
+
+
+@app.post("/api/llm/grade")
+def llm_grade(req: LlmGradeRequest) -> dict:
+    target = _resolve_target(req.session_id, req.filename)
+    try:
+        circuit = parse_dig_file(target["path"])
+        netlist = build_netlist(circuit)
+        graph = build_signal_graph(circuit, netlist)
+    except Exception as exc:
+        return {"ok": False, "error": f"Parse failed: {exc}", "total": None,
+                "sub_scores": [], "grader_model": req.grader_model, "usage": None}
+    try:
+        facts_obj = extract_facts(circuit, netlist=netlist, graph=graph)
+        facts_dict = facts_obj.to_dict() if hasattr(facts_obj, "to_dict") else circuit_summary(circuit, netlist)
+    except Exception:
+        facts_dict = circuit_summary(circuit, netlist)
+
+    student_goal = (req.student_goal or "").strip()[:1200] or None
+    return grade_summary(
+        facts=facts_dict,
+        summary_text=req.summary_text or "",
+        student_goal=student_goal,
+        test_summary=req.test_summary,
+        grader_model=req.grader_model,
     )
 
 def main() -> None:
