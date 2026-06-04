@@ -888,6 +888,26 @@ main {
 .l2-llm-status.gated   { color: #92400e; }
 .l2-llm-status.done    { color: #15803d; }
 
+.llm-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.llm-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: llm-dot-bounce 1s infinite ease-in-out both;
+}
+.llm-dots i:nth-child(1) { animation-delay: -0.32s; }
+.llm-dots i:nth-child(2) { animation-delay: -0.16s; }
+@keyframes llm-dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+  40%           { transform: translateY(-4px); opacity: 1; }
+}
+
 .l2-output {
   margin-top: 12px;
   font-size: 13px;

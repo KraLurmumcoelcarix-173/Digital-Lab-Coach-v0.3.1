@@ -1409,8 +1409,9 @@ l2LlmBtn.addEventListener("click", async () => {
   }
 
   l2LlmBtn.disabled = true;
-  l2LlmStatus.textContent =
-    `Talking to ${selectedInfo ? selectedInfo.label : "the model"}...`;
+  l2LlmStatus.innerHTML =
+    `Talking to ${escapeHtml(selectedInfo ? selectedInfo.label : "the model")}` +
+    `<span class="llm-dots" aria-hidden="true"><i></i><i></i><i></i></span>`;
   l2LlmStatus.className = "l2-llm-status running";
   l2LlmOutput.innerHTML = "";
   l2LlmOutput.classList.add("empty");
