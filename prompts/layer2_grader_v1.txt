@@ -57,11 +57,16 @@ every fabricated item in "hallucinated_items".
 
 # ISSUE FLAGS
 
-Independently of the scores, list in "flags" any specific problem a careful
-reader would catch: an instruction word or value stated without being decoded
-or derived, an internal contradiction, a claim unsupported by the facts or test
-rows, or a stage left unexplained. One short sentence each. This does NOT change
-any score; leave it [] when the summary is clean.
+In "flags", list ONLY genuine problems a careful reader would catch - an
+instruction word or value stated without being decoded or derived, an internal
+contradiction, or a claim that contradicts the facts or test rows. One short
+sentence each. Do NOT:
+  - list confirmations that something is correct, consistent, or "fine";
+  - repeat a weakness already reflected in the sub-scores above (flags are only
+    for issues those scores do not already capture);
+  - flag that a multiplexer or selector mapping is "asserted rather than
+    derived" - that is expected given the available facts and is already scored.
+Leave "flags" as [] when there is nothing genuinely wrong to add.
 
 # OUTPUT
 
