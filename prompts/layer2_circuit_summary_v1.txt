@@ -227,6 +227,19 @@ P3.11 GIVEN a Multiplexer or other selector is driven by decoded logic
      which result) and do not assert a select-bit-to-input mapping that
      is not present in the facts.
 
+P3.12 GIVEN the circuit is processor-like (a program-counter Register
+     feeds an instruction-memory ROM, with decode/execute subcircuits
+     such as a control unit, register file, or ALU),
+     WHEN you write the trace,
+     THEN walk the full instruction cycle and name each stage in order:
+     the program counter supplies the ROM address; the ROM returns the
+     instruction word; the control unit decodes that word into its
+     control signals; the register file reads the source operands; the
+     ALU or other execute unit computes; and the result is written back
+     or appears at the outputs. You MUST include the program counter and
+     the control unit, and you MUST show how the circuit produces the
+     row's output values, not merely restate them.
+
 ## Paragraph 4 - Goal comparison
 
 P4.1 GIVEN [STUDENT GOAL] contains exactly the string "(none)",
@@ -358,6 +371,11 @@ SI5. GIVEN a value is a wide instruction word or opcode encoding (more
     decimal. Converting a wide encoding to decimal is error-prone and
     not meaningful; the decimal-in-parentheses rule (SI3) applies only
     to small operand values of roughly 8 bits or fewer.
+
+SI6. GIVEN you are tempted to produce signal flow example paragraph,
+    WHEN you write it,
+    THEN you must not say something like "Using the test rows", even if you do use 
+    the test rows, do not say it out.
 
 # EDGE CASES
 

@@ -1,6 +1,5 @@
 """
 F7: Combinational loop checker.
-=
 """
 
 from dlc.parser.models import Circuit
