@@ -699,6 +699,20 @@ main {
 .grade-note.capped { color: #b91c1c; font-weight: 600; }
 .grade-meta { margin-top: 8px; font-size: 11px; color: var(--muted); }
 
+.grade-flags {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fffdf5;
+}
+.grade-flags-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); font-weight: 600; margin-bottom: 5px;
+}
+.grade-flags ul { margin: 0; padding-left: 18px; }
+.grade-flags li { font-size: 12px; line-height: 1.4; margin: 2px 0; }
+
 .library-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

@@ -1637,10 +1637,14 @@ function renderGradeDonut(g) {
     ? `<div class="grade-note capped">Capped at ${g.total} - hallucinated: ${escapeHtml((g.hallucinated_items || []).join(", ") || "yes")}.</div>`
     : "";
   const meta = `<div class="grade-meta">Grader: ${escapeHtml(g.grader_model || "?")}${(g.raw_total != null && g.raw_total !== g.total) ? ` (raw ${g.raw_total})` : ""}</div>`;
+  const flags = (g.flags && g.flags.length)
+    ? `<div class="grade-flags"><div class="grade-flags-title">Grader notes - issues caught (not scored)</div><ul>` +
+      g.flags.map((f) => `<li>${escapeHtml(String(f))}</li>`).join("") + `</ul></div>`
+    : "";
 
   gradeBody.innerHTML =
     `<div class="grade-card">${svg}<div class="grade-info">${legend}` +
-    `<div class="grade-detail muted">Hover a slice or row for how it is graded.</div>${note}${meta}</div></div>`;
+    `<div class="grade-detail muted">Hover a slice or row for how it is graded.</div>${note}${meta}</div></div>${flags}`;
 
   const detail = gradeBody.querySelector(".grade-detail");
   const card = gradeBody.querySelector(".grade-card");

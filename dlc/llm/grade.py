@@ -176,6 +176,7 @@ def grade_summary(
 
     hallucination = bool(parsed.get("hallucination", False))
     hallucinated = parsed.get("hallucinated_items", []) or []
+    flags = [str(f).strip() for f in (parsed.get("flags", []) or []) if str(f).strip()]
     raw_total, capped = total, False
     if hallucination and total > HALLUCINATION_CAP:
         total, capped = HALLUCINATION_CAP, True
@@ -185,6 +186,7 @@ def grade_summary(
         "total": total, "raw_total": raw_total, "band": _band(total),
         "capped": capped, "hallucination": hallucination,
         "hallucinated_items": hallucinated,
+        "flags": flags,
         "sub_scores": sub_scores,
         "grader_model": grader_model, "usage": result["usage"],
     }

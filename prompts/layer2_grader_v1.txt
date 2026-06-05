@@ -55,6 +55,14 @@ in or derivable from [CIRCUIT FACTS]. Naming a standard part you recognize is
 fine; inventing a part this circuit does not contain is a hallucination. List
 every fabricated item in "hallucinated_items".
 
+# ISSUE FLAGS
+
+Independently of the scores, list in "flags" any specific problem a careful
+reader would catch: an instruction word or value stated without being decoded
+or derived, an internal contradiction, a claim unsupported by the facts or test
+rows, or a stage left unexplained. One short sentence each. This does NOT change
+any score; leave it [] when the summary is clean.
+
 # OUTPUT
 
 Output ONLY one JSON object - no prose, no markdown, no code fences - in
@@ -69,6 +77,7 @@ exactly this shape (integers only for the scores):
   "lecture_relevance": 0,
   "hallucination": false,
   "hallucinated_items": [],
+  "flags": [],
   "rationales": {
     "function_accuracy": "one short sentence",
     "signal_flow_accuracy": "one short sentence",

@@ -240,6 +240,16 @@ P3.12 GIVEN the circuit is processor-like (a program-counter Register
      the control unit, and you MUST show how the circuit produces the
      row's output values, not merely restate them.
 
+P3.13 GIVEN you cite an instruction word fetched from a ROM in the
+     trace,
+     WHEN you mention that word,
+     THEN decode it the SAME way for every instruction - name its
+     operation, its destination, source, and immediate fields - and
+     connect each register read to the instruction's source register
+     (ReadData1 reads rs1, ReadData2 reads rs2). Never leave a raw
+     instruction word (for example 0x70128313) in the trace without its
+     decode and a value you justify from that decode.
+
 ## Paragraph 4 - Goal comparison
 
 P4.1 GIVEN [STUDENT GOAL] contains exactly the string "(none)",
