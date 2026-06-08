@@ -1,7 +1,7 @@
 """
 Layer 2 main benchmark.
 
-Matrix: BENCH_MODELS x BENCH_CIRCUITS x GOAL_CONDITIONS x RUNS_PER_CELL.
+Matrix: BENCH_MODELS x BENCH_CIRCUITS x GOAL_CONDITIONS (3 TYPES) x RUNS_PER_CELL.
 For each cell it generates a summary with the model under test, grades it
 with BENCH_GRADER, and writes one CSV row. Rows are flushed incrementally
 so a crash mid-run keeps what finished.
@@ -127,12 +127,13 @@ def run_benchmark(progress=print) -> Path:
         w = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
         w.writeheader()
         for model in C.BENCH_MODELS:
-            for path, goal_text in C.BENCH_CIRCUITS:
+            for path, good_goal, wrong_goal in C.BENCH_CIRCUITS:
                 for cond in C.GOAL_CONDITIONS:
-                    goal = goal_text if cond == "goal" else None
+                    goal = {"goal": good_goal, "wrong_goal": wrong_goal, "no_goal": None}[cond]
                     for run_idx in range(C.RUNS_PER_CELL):
                         row = run_one(model, path, goal, C.BENCH_GRADER)
                         row["run_idx"] = run_idx
+                        row["goal_condition"] = cond
                         w.writerow(row)
                         fh.flush()
                         done += 1
