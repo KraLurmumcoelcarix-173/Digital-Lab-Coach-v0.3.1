@@ -1,3 +1,13 @@
+"""
+Phase 3: turn a benchmark CSV into quality-vs-cost numbers + a Pareto chart,
+to pick the 2 production models.
+
+    uv run python -m dlc.evaluator.plots [path/to/l2_benchmark_*.csv]
+
+With no path it uses the newest l2_benchmark_*.csv in config.OUTPUT_DIR.
+Always writes a summary CSV and prints a ranked table + Pareto frontier;
+also renders PNG charts if matplotlib is installed (`uv add matplotlib`).
+"""
 
 from __future__ import annotations
 
@@ -36,7 +46,7 @@ def load(path: Path) -> list[dict]:
     with open(path, newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             g = _num(r.get("grade_total"))
-            if g is None:           
+            if g is None:            # skip gated / failed / ungraded cells
                 continue
             rows.append({
                 "model": r["model"],
@@ -45,6 +55,9 @@ def load(path: Path) -> list[dict]:
                 "grade": g,
                 "cost": _gen_cost(r["model"], _num(r.get("gen_in_tokens")),
                                   _num(r.get("gen_out_tokens"))),
+                "grade_cost": _gen_cost(r.get("grader_model", ""),
+                                        _num(r.get("grade_in_tokens")),
+                                        _num(r.get("grade_out_tokens"))),
             })
     return rows
 
@@ -109,6 +122,9 @@ def main(path=None):
     for cond in sorted({r["condition"] for r in rows}):
         gs = [r["grade"] for r in rows if r["condition"] == cond]
         print(f"  mean grade [{cond:<7}] = {round(statistics.mean(gs), 2)}  (n={len(gs)})")
+    gcosts = [r["grade_cost"] for r in rows if r.get("grade_cost") is not None]
+    if gcosts:
+        print(f"  mean grading cost = ${round(statistics.mean(gcosts), 5)} per summary (grader constant)")
 
     try:
         import matplotlib

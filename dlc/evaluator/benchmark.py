@@ -1,4 +1,19 @@
+"""
+Layer 2 main benchmark.
 
+Matrix: BENCH_MODELS x BENCH_CIRCUITS x GOAL_CONDITIONS x RUNS_PER_CELL.
+For each cell it generates a summary with the model under test, grades it
+with BENCH_GRADER, and writes one CSV row. Rows are flushed incrementally
+so a crash mid-run keeps what finished.
+
+This does NOT run on import. Configure dlc/evaluator/config.py and your API
+keys, then::
+
+    uv run python -m dlc.evaluator.benchmark            # full matrix
+    uv run python -m dlc.evaluator.benchmark --dry-run  # print the plan only
+
+The CSV lands in config.OUTPUT_DIR (outside the repo, IRB-safe).
+"""
 
 from __future__ import annotations
 
@@ -27,7 +42,8 @@ CSV_FIELDS = [
     "gen_ok", "gen_error", "gate_message", "gen_ms",
     "gen_in_tokens", "gen_out_tokens",
     "grade_total", "grade_raw_total", "grade_band", "grade_capped",
-    "hallucination", "grade_ms", "grader_model", "grade_error",
+    "hallucination", "grade_ms", "grade_in_tokens", "grade_out_tokens",
+    "grader_model", "grade_error",
     *[f"sub_{k}" for k in _SUBSCORE_KEYS],
     "summary_text",
 ]
@@ -75,6 +91,7 @@ def run_one(model: str, circuit_path: str, goal: str | None,
     text = summ.get("text")
     row["summary_text"] = (text or "").replace("\r", " ")
 
+    # Only grade a real summary (gated/empty/failed -> skip grading).
     if not (summ.get("ok") and text):
         return row
 
@@ -83,6 +100,9 @@ def run_one(model: str, circuit_path: str, goal: str | None,
                           test_summary=C.TEST_SUMMARY, grader_model=grader_model)
     row["grade_ms"] = round((time.time() - t1) * 1000)
     row["grader_model"] = grade.get("grader_model", grader_model)
+    gusage = grade.get("usage") or {}
+    row["grade_in_tokens"] = gusage.get("input_tokens", "")
+    row["grade_out_tokens"] = gusage.get("output_tokens", "")
     if not grade.get("ok"):
         row["grade_error"] = grade.get("error") or "grade failed"
         return row
