@@ -91,7 +91,6 @@ def run_one(model: str, circuit_path: str, goal: str | None,
     text = summ.get("text")
     row["summary_text"] = (text or "").replace("\r", " ")
 
-    # Only grade a real summary (gated/empty/failed -> skip grading).
     if not (summ.get("ok") and text):
         return row
 
