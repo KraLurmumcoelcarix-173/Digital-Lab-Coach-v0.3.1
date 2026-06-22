@@ -51,9 +51,9 @@
   .grid-with-labels { display: flex; }
   .rowvar { display: flex; align-items: center; margin-right: 4px; margin-top: 22px; }
   .rowvar span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 700; color: #5c6bc0; }
-  .labels-col { display: grid; gap: 4px; margin-right: 6px; }
+  .labels-col { display: grid; gap: 4px; margin-right: 10px; }
   .labels-col span { display:flex; align-items:center; justify-content:center; height: var(--cell,50px); font-size: 12px; font-weight: 600; color: #6b7280; }
-  .labels-row { display: grid; gap: 4px; margin-bottom: 4px; }
+  .labels-row { display: grid; gap: 4px; margin-bottom: 8px; }
   .labels-row span { display:flex; align-items:center; justify-content:center; height: 22px; font-size: 12px; font-weight: 600; color: #6b7280; }
   .kmap-grid { display: grid; gap: 4px; }
   .kmap-cell { width: var(--cell,50px); height: var(--cell,50px); display: flex; align-items: center; justify-content: center;
@@ -67,7 +67,9 @@
 
   .loop-layer { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
   .loop { position: absolute; border: 3px solid; border-radius: 11px; }
+  .loop.anim { transition: left .35s ease, top .35s ease, width .35s ease, height .35s ease, border-radius .35s ease; }
   .loop-label { position: absolute; z-index: 6; font-size: 11px; font-weight: 700; padding: 0 4px; border-radius: 5px; background: #fff; border: 1.5px solid; pointer-events: none; }
+  .loop-label.anim { transition: left .35s ease, top .35s ease; }
 
   table.truth { border-collapse: collapse; width: 100%; font-size: 13px; }
   table.truth th, table.truth td { border: 1px solid #e3e7f0; padding: 4px 6px; text-align: center; }
@@ -142,7 +144,7 @@
 
   var VARS = "ABCDEF";
 
-  // low-level pattern helpers 
+  // ---- low-level pattern helpers -----------------------------------------
 
   // All minterms covered by a pattern (free bits expand both ways).
   function patternMinterms(pattern, n) {
@@ -207,7 +209,7 @@
     return lits.length === 0 ? "0" : "(" + lits.join("+") + ")";
   }
 
-  // model 
+  // ---- model -------------------------------------------------------------
 
   function KMapModel(numVars) {
     if (numVars < 2 || numVars > 6) {
@@ -279,7 +281,7 @@
   KMapModel.prototype.toggleMinterm = function (m) { var rc = this.mintermToCell(m); this.toggleCell(rc[0], rc[1]); };
   KMapModel.prototype.setMinterm = function (m, v) { var rc = this.mintermToCell(m); this.setCellValue(rc[0], rc[1], v); };
 
-  // -expression parser (SOP text -> minterms) 
+  // ---- expression parser (SOP text -> minterms) --------------------------
 
   var ExpressionParser = {
     parse: function (expression, numVars) {
@@ -329,7 +331,7 @@
     }
   }
 
-  // solver 
+  // ---- solver ------------------------------------------------------------
 
   function KMapSolver() {}
 
@@ -526,7 +528,7 @@
     return out;
   };
 
-  // exports 
+  // ---- exports -----------------------------------------------------------
   var api = {
     KMapModel: KMapModel,
     ExpressionParser: ExpressionParser,
@@ -550,7 +552,7 @@
     var solver = new KMapSolver();
     var state = { model: new KMapModel(4), form: 'SOP', lastSolve: null, selectedCover: 0 };
 
-    // layout: single map for n<=4, stacked 4-var maps for n=5,6 
+    // ---------- layout: single map for n<=4, stacked 4-var maps for n=5,6 ----
     function grayN(bits) { var out = [], n = 1 << bits; for (var i = 0; i < n; i++) { var g = i ^ (i >> 1); out.push(g.toString(2).padStart(bits, '0')); } return out; }
     function buildLayout(m) {
       var n = m.numVars;
@@ -577,21 +579,26 @@
       return { panels: panels, perRow: 1 };
     }
 
-    // setup 
+    // ---------- setup ----------
     function setVars(n) { state.model = new KMapModel(parseInt(n, 10)); resetSolve(); renderAll(); }
     function setForm(f) {
       state.form = f;
       document.querySelectorAll('#formSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.form === f); });
       renderPrinciples();
-      if (state.lastSolve) solve(); else renderAll();
+      if (state.lastSolve) {
+        state.lastSolve = solver.solve(state.model, state.form);
+        state.selectedCover = 0;
+        renderResults();
+        paintLoops(true);
+      } else { renderAll(); }
     }
     function resetSolve() { state.lastSolve = null; state.selectedCover = 0; }
 
-    // interaction 
+    // ---------- interaction ----------
     function cellClick(m) { state.model.toggleMinterm(m); resetSolve(); renderAll(); }
     function truthToggle(m) { state.model.toggleMinterm(m); resetSolve(); renderAll(); }
 
-    // solve 
+    // ---------- solve ----------
     function solve() { state.lastSolve = solver.solve(state.model, state.form); state.selectedCover = 0; renderResults(); renderKmap(); }
     function selectCover(i) { state.selectedCover = i; renderResults(); renderKmap(); }
     function parseExpr() {
@@ -610,7 +617,7 @@
       document.getElementById('exprInput').value = presets[state.model.numVars] || ''; parseExpr();
     }
 
-    // rendering 
+    // ---------- rendering ----------
     function renderAll() {
       renderPrinciples(); renderKmap(); renderTruth();
       if (state.lastSolve) renderResults(); else clearResults();
@@ -626,7 +633,7 @@
       L.panels.forEach(function (panel, pi) { html += renderPanel(panel, pi, m); });
       html += '<div class="loop-layer" id="loopLayer"></div></div>';
       document.getElementById('kmapWrapper').innerHTML = html;
-      drawLoops();
+      paintLoops(false);
     }
     function renderPanel(panel, pi, m) {
       var nr = panel.rowLabels.length, nc = panel.colLabels.length, colTmpl = 'grid-template-columns:repeat(' + nc + ',var(--cell,50px));';
@@ -654,41 +661,85 @@
       }
       return [];
     }
-    function drawLoops() {
-      var layer = document.getElementById('loopLayer'); if (!layer) return; layer.innerHTML = '';
-      var groups = currentLoopGroups(), areaRect = layer.getBoundingClientRect();
+    // Build a flat list of loop/label specs (keyed) with wrap-bulge geometry.
+    function loopSpecs() {
+      var layer = document.getElementById('loopLayer'); if (!layer) return [];
+      var groups = currentLoopGroups(), areaRect = layer.getBoundingClientRect(), specs = [];
       groups.forEach(function (g, gi) {
-        var color = g.color, inset = Math.min(3 + gi * 3, 12), bySub = {};
+        var color = g.color, inset = Math.min(3 + gi * 3, 10), bulge = 7, bySub = {};
         g.minterms.forEach(function (mm) { var c = document.querySelector('.kmap-cell[data-m="' + mm + '"]'); if (!c) return; (bySub[c.dataset.submap] = bySub[c.dataset.submap] || []).push(c); });
-        var labelPlaced = false;
+        var ri = 0, labelDone = false;
         Object.keys(bySub).forEach(function (sub) {
           var cells = bySub[sub];
-          var srs = uniqSorted(cells.map(function (c) { return +c.dataset.sr; }));
-          var scs = uniqSorted(cells.map(function (c) { return +c.dataset.sc; }));
-          runs(srs).forEach(function (rRun) {
-            runs(scs).forEach(function (cRun) {
+          var subCells = document.querySelectorAll('.kmap-cell[data-submap="' + sub + '"]');
+          var maxSr = 0, maxSc = 0;
+          subCells.forEach(function (c) { maxSr = Math.max(maxSr, +c.dataset.sr); maxSc = Math.max(maxSc, +c.dataset.sc); });
+          var rowRuns = runs(uniqSorted(cells.map(function (c) { return +c.dataset.sr; })));
+          var colRuns = runs(uniqSorted(cells.map(function (c) { return +c.dataset.sc; })));
+          var hWrap = colRuns.length >= 2 && colRuns[0][0] === 0 && colRuns[colRuns.length - 1].slice(-1)[0] === maxSc;
+          var vWrap = rowRuns.length >= 2 && rowRuns[0][0] === 0 && rowRuns[rowRuns.length - 1].slice(-1)[0] === maxSr;
+          rowRuns.forEach(function (rRun) {
+            colRuns.forEach(function (cRun) {
               var a = cellBy(sub, rRun[0], cRun[0]), b = cellBy(sub, rRun[rRun.length - 1], cRun[cRun.length - 1]);
               if (!a || !b) return;
               var ar = a.getBoundingClientRect(), br = b.getBoundingClientRect();
-              var d = document.createElement('div'); d.className = 'loop';
-              d.style.left = (ar.left - areaRect.left + inset) + 'px';
-              d.style.top = (ar.top - areaRect.top + inset) + 'px';
-              d.style.width = (br.right - ar.left - 2 * inset) + 'px';
-              d.style.height = (br.bottom - ar.top - 2 * inset) + 'px';
-              d.style.borderColor = color; d.style.background = hexA(color, .08);
-              layer.appendChild(d);
-              if (!labelPlaced && g.literal) {
-                var lab = document.createElement('div'); lab.className = 'loop-label'; lab.textContent = g.literal;
-                lab.style.color = color; lab.style.borderColor = color;
-                lab.style.left = (ar.left - areaRect.left + inset + 2) + 'px';
-                lab.style.top = (ar.top - areaRect.top + inset - 9) + 'px';
-                layer.appendChild(lab); labelPlaced = true;
+              var L0 = ar.left - areaRect.left, T0 = ar.top - areaRect.top, R0 = br.right - areaRect.left, B0 = br.bottom - areaRect.top;
+              var openL = hWrap && cRun[0] === 0, openR = hWrap && cRun.slice(-1)[0] === maxSc;
+              var openT = vWrap && rRun[0] === 0, openB = vWrap && rRun.slice(-1)[0] === maxSr;
+              var isWrap = openL || openR || openT || openB;
+              var left = L0 + (openL ? -bulge : inset), top = T0 + (openT ? -bulge : inset);
+              var right = R0 + (openR ? bulge : -inset), bottom = B0 + (openB ? bulge : -inset);
+              specs.push({ key: 'c' + gi + '_s' + sub + '_r' + ri, left: left, top: top, width: right - left, height: bottom - top, color: color, wrap: isWrap, oL: openL, oR: openR, oT: openT, oB: openB });
+              if (!labelDone && g.literal) {
+                specs.push({ label: true, key: 'lab_c' + gi, text: g.literal, color: color, left: left + 2, top: top - 9 });
+                labelDone = true;
               }
+              ri++;
             });
           });
         });
       });
+      return specs;
     }
+
+    // Paint loops. animate=true (only the SOP<->POS toggle) reuses divs by key so
+    // a color present in both views slides; added/removed colors pop instantly.
+    function paintLoops(animate) {
+      var layer = document.getElementById('loopLayer'); if (!layer) return;
+      var specs = loopSpecs(), existing = {}, seen = {};
+      if (!animate) layer.innerHTML = '';
+      else Array.prototype.forEach.call(layer.children, function (el) { existing[el.dataset.key] = el; });
+      specs.forEach(function (s) {
+        seen[s.key] = true;
+        var el = animate ? existing[s.key] : null;
+        if (s.label) {
+          if (!el) { el = document.createElement('div'); el.className = 'loop-label'; el.dataset.key = s.key; layer.appendChild(el); }
+          else el.classList.add('anim');
+          el.textContent = s.text; el.style.color = s.color; el.style.borderColor = s.color;
+          el.style.left = s.left + 'px'; el.style.top = s.top + 'px';
+        } else {
+          if (!el) { el = document.createElement('div'); el.className = 'loop'; el.dataset.key = s.key; layer.appendChild(el); }
+          else el.classList.add('anim');
+          el.style.left = s.left + 'px'; el.style.top = s.top + 'px';
+          el.style.width = s.width + 'px'; el.style.height = s.height + 'px';
+          el.style.borderColor = s.color; el.style.borderStyle = 'solid';
+          if (s.wrap) {
+            el.style.background = 'transparent';
+            el.style.borderTopWidth = s.oT ? '0' : '3px';
+            el.style.borderBottomWidth = s.oB ? '0' : '3px';
+            el.style.borderLeftWidth = s.oL ? '0' : '3px';
+            el.style.borderRightWidth = s.oR ? '0' : '3px';
+            el.style.borderRadius = '16px';
+          } else {
+            el.style.background = hexA(s.color, .08);
+            el.style.borderTopWidth = el.style.borderRightWidth = el.style.borderBottomWidth = el.style.borderLeftWidth = '3px';
+            el.style.borderRadius = '11px';
+          }
+        }
+      });
+      if (animate) Array.prototype.slice.call(layer.children).forEach(function (el) { if (!seen[el.dataset.key]) el.parentNode.removeChild(el); });
+    }
+    function drawLoops() { paintLoops(false); }
 
     function renderTruth() {
       var m = state.model, n = m.numVars, el = document.getElementById('truthTable');
@@ -725,7 +776,7 @@
     }
     function clearResults() { document.getElementById('results').innerHTML = '<h3>Results</h3><p class="muted">Press <b>Solve</b> for the minimal answer.</p>'; }
 
-    // helpers
+    // ---------- helpers ----------
     function uniqSorted(a) { return Array.from(new Set(a)).sort(function (x, y) { return x - y; }); }
     function runs(sorted) { var out = [], cur = []; for (var i = 0; i < sorted.length; i++) { if (!cur.length || sorted[i] === cur[cur.length - 1] + 1) cur.push(sorted[i]); else { out.push(cur); cur = [sorted[i]]; } } if (cur.length) out.push(cur); return out; }
     function cellBy(sub, sr, sc) { return document.querySelector('.kmap-cell[data-submap="' + sub + '"][data-sr="' + sr + '"][data-sc="' + sc + '"]'); }
