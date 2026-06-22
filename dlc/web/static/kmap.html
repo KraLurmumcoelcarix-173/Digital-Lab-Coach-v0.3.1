@@ -382,19 +382,25 @@
 
   // Petrick: all minimum-size sets of PI indices that cover every clause.
   function petrick(clauses) {
-    var products = [new Set()];
+    var CAP = 2000, products = [new Set()];
     for (var ci = 0; ci < clauses.length; ci++) {
-      var clause = clauses[ci], next = [];
+      var clause = clauses[ci], next = [], seen = {};
       for (var pi = 0; pi < products.length; pi++) {
         for (var j = 0; j < clause.length; j++) {
-          var s = new Set(products[pi]); s.add(clause[j]); next.push(s);
+          var s = new Set(products[pi]); s.add(clause[j]);
+          var key = Array.from(s).sort(function (a, b) { return a - b; }).join(',');
+          if (!seen[key]) { seen[key] = 1; next.push(s); }
         }
       }
-      products = absorb(next);
+      next.sort(function (a, b) { return a.size - b.size; });
+      if (next.length > CAP) next.length = CAP;
+      products = next;
     }
     var min = Infinity;
-    for (var p = 0; p < products.length; p++) min = Math.min(min, products[p].size);
-    return products.filter(function (s) { return s.size === min; });
+    for (var p = 0; p < products.length; p++) if (products[p].size < min) min = products[p].size;
+    var mins = products.filter(function (s) { return s.size === min; });
+    mins.capped = (mins.length >= CAP);
+    return mins;
   }
   function absorb(list) {
     var sorted = list.slice().sort(function (a, b) { return a.size - b.size; });
@@ -468,7 +474,7 @@
     essential.forEach(function (i) { useful[i].minterms.forEach(function (mm) { coveredByEss.add(mm); }); });
     var remaining = required.filter(function (mm) { return !coveredByEss.has(mm); });
 
-    var covers;
+    var covers, coversCapped = false;
     if (remaining.length === 0) {
       covers = [Array.from(essential).map(function (i) { return useful[i]; })];
     } else {
@@ -476,6 +482,7 @@
         return coverIdxByMin[mm].filter(function (i) { return !essential.has(i); });
       });
       var sets = petrick(clauses);
+      coversCapped = !!sets.capped;
       var essArr = Array.from(essential);
       covers = sets.map(function (s) {
         return essArr.concat(Array.from(s)).map(function (i) { return useful[i]; });
@@ -492,6 +499,7 @@
       mode: mode, constant: null,
       primeImplicants: useful,
       covers: covers,
+      coversCapped: coversCapped,
       expression: this.expression(covers[0], mode),
       principles: principles,
       explain: self2.explainCover(covers[0], model, mode)
@@ -783,8 +791,12 @@
       });
       html += '</ul>';
       if (res.covers.length > 1) {
-        html += '<div class="covers"><b style="font-size:13px;">' + res.covers.length + ' equally-minimal solutions:</b><br>';
-        res.covers.forEach(function (cov, i) { html += '<span class="chip' + (i === state.selectedCover ? ' active' : '') + '" onclick="App.selectCover(' + i + ')">' + solver.expression(cov, res.mode) + '</span>'; });
+        var total = res.covers.length, shown = Math.min(total, 10), capMark = (res.coversCapped && total > shown) ? '+' : '';
+        html += '<div class="covers"><b style="font-size:13px;">' + total + capMark + ' equally-minimal solutions' + (total > shown ? ' (showing first ' + shown + ')' : '') + ':</b><br>';
+        for (var ci = 0; ci < shown; ci++) {
+          html += '<span class="chip' + (ci === state.selectedCover ? ' active' : '') + '" onclick="App.selectCover(' + ci + ')">' + solver.expression(res.covers[ci], res.mode) + '</span>';
+        }
+        if (total > shown) html += '<span class="muted" style="font-size:12px; margin-left:6px;">… ' + (total - shown) + capMark + ' more</span>';
         html += '</div>';
       }
       el.innerHTML = html;
