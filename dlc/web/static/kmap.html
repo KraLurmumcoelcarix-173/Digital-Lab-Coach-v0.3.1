@@ -40,7 +40,8 @@
 
   .layout { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
   .col-kmap { flex: 0 0 auto; max-width: 100%; overflow-x: auto; }
-  .col-results { flex: 1; min-width: 340px; }
+  .col-rstack { flex: 1; min-width: 340px; display: flex; flex-direction: column; gap: 14px; }
+  .col-rstack .card { margin-bottom: 0; }
   .col-truth { width: 250px; }
 
   .kmap-wrapper { display: inline-block; }
@@ -90,6 +91,13 @@
   .covers .chip { display:inline-block; max-width:100%; padding: 5px 10px; margin: 3px; border-radius: 7px; background:#f0f2f8; cursor:pointer; font-size: 13px; border: 1px solid transparent; overflow-wrap: anywhere; word-break: break-word; vertical-align: top;}
   .covers .chip.active { border-color:#1a237e; background:#e8eaf6; }
   .muted { color:#8a94a6; font-style: italic; }
+  #implicants h3 { margin: 0 0 8px; color: #1a237e; }
+  .imp-def { font-size: 12px; line-height: 1.5; margin: 0 0 8px; font-style: normal; }
+  .imp-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .imp-list li { font-size: 14px; padding: 5px 10px; border-radius: 7px; background: #f0f2f8; }
+  .imp-list li.epi { background: #e8f5e9; border: 1px solid #a5d6a7; }
+  .epi-badge { font-size: 11px; font-weight: 700; color: #2e7d32; }
+  .imp-sum { font-size: 12px; margin: 10px 0 0; }
 </style>
 </head>
 <body>
@@ -131,9 +139,15 @@
       <h3 style="margin:0 0 8px; color:#1a237e; font-size:15px;">Truth table</h3>
       <div class="truth-scroll" id="truthTable"></div>
     </div>
-    <div class="card col-results" id="results">
-      <h3>Results</h3>
-      <p class="muted">Press <b>Solve</b> for the minimal answer.</p>
+    <div class="col-rstack">
+      <div class="card" id="results">
+        <h3>Results</h3>
+        <p class="muted">Press <b>Solve</b> for the minimal answer.</p>
+      </div>
+      <div class="card" id="implicants">
+        <h3>Implicants</h3>
+        <p class="muted">Solve a non-constant function to list prime implicants.</p>
+      </div>
     </div>
   </div>
 
@@ -756,6 +770,7 @@
     }
     function renderResults() {
       var res = state.lastSolve; if (!res) { clearResults(); return; }
+      renderImplicants();
       var el = document.getElementById('results'), html = '<h3>Results — minimal ' + res.mode + '</h3>';
       if (res.constant) { el.innerHTML = html + '<div class="answer">' + res.mode + ' = ' + res.constant + '</div><p class="muted">' + (res.explain[0] || '') + '</p>'; return; }
       var cover = res.covers[state.selectedCover] || res.covers[0];
@@ -774,7 +789,34 @@
       }
       el.innerHTML = html;
     }
-    function clearResults() { document.getElementById('results').innerHTML = '<h3>Results</h3><p class="muted">Press <b>Solve</b> for the minimal answer.</p>'; }
+    function clearResults() { document.getElementById('results').innerHTML = '<h3>Results</h3><p class="muted">Press <b>Solve</b> for the minimal answer.</p>'; renderImplicants(); }
+    function renderImplicants() {
+      var el = document.getElementById('implicants'); if (!el) return;
+      var res = state.lastSolve;
+      if (!res || res.constant || !res.primeImplicants || !res.primeImplicants.length) {
+        el.innerHTML = '<h3>Implicants</h3><p class="muted">Solve a non-constant function to list prime implicants.</p>';
+        return;
+      }
+      var n = state.model.numVars, target = res.mode === 'POS' ? '0' : '1', pis = res.primeImplicants;
+      var required = [];
+      for (var m = 0; m < (1 << n); m++) if (state.model.valueAtMinterm(m) === target) required.push(m);
+      var essSet = {};
+      required.forEach(function (mm) {
+        var cov = []; pis.forEach(function (pi, i) { if (pi.minterms.indexOf(mm) !== -1) cov.push(i); });
+        if (cov.length === 1) essSet[cov[0]] = true;
+      });
+      var html = '<h3>Implicants</h3>';
+      html += '<p class="muted imp-def">A <b>prime implicant</b> is a group that can\'t be made larger; an <b>essential</b> one (★) is the only group covering some ' + (target === '1' ? '1' : '0') + ', so every minimal answer must use it.</p>';
+      html += '<ul class="imp-list">';
+      pis.forEach(function (pi, i) {
+        var ess = essSet[i];
+        html += '<li' + (ess ? ' class="epi"' : '') + '><b>' + pi.literal + '</b>' + (ess ? ' <span class="epi-badge">★</span>' : '') + '</li>';
+      });
+      html += '</ul>';
+      var essLits = pis.filter(function (pi, i) { return essSet[i]; }).map(function (pi) { return pi.literal; });
+      html += '<p class="muted imp-sum">' + pis.length + ' prime implicant' + (pis.length === 1 ? '' : 's') + ' · ' + essLits.length + ' essential' + (essLits.length ? ' (' + essLits.join(', ') + ')' : '') + '.</p>';
+      el.innerHTML = html;
+    }
 
     // ---------- helpers ----------
     function uniqSorted(a) { return Array.from(new Set(a)).sort(function (x, y) { return x - y; }); }
