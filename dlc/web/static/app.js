@@ -1783,8 +1783,7 @@ function renderGradeDonut(g) {
 
   gradeBody.innerHTML =
     `<div class="grade-card">${svg}<div class="grade-info">${legend}` +
-    `<div class="grade-detail muted">Hover a slice or row for how it is graded.</div>${note}</div></div>${flags}`;
-
+    `<div class="grade-detail muted"></div>${note}</div></div>${flags}`;
   const detail = gradeBody.querySelector(".grade-detail");
   const card = gradeBody.querySelector(".grade-card");
   const valArcs = gradeBody.querySelectorAll(".grade-val");
@@ -1793,10 +1792,12 @@ function renderGradeDonut(g) {
     const s = subs[i];
     if (!s) return;
     detail.classList.remove("muted");
+    const full = s.score >= s.max;
     detail.innerHTML =
       `<div class="gd-title">${escapeHtml(s.label)} - ${s.score}/${s.max} <span class="lg-src">${escapeHtml(s.source)}</span></div>` +
-      `<div class="gd-how">${escapeHtml(s.description || "")}</div>` +
-      (s.rationale ? `<div class="gd-why">"${escapeHtml(s.rationale)}"</div>` : "");
+      (full ? "" :
+        `<div class="gd-how">${escapeHtml(s.description || "")}</div>` +
+        (s.rationale ? `<div class="gd-why">"${escapeHtml(s.rationale)}"</div>` : ""));
   };
   // Highlight + "pop" the slice WITHOUT moving the hit geometry, so the
   // pointer never bounces in/out near a slice edge. Hovering a slice OR its
@@ -1814,7 +1815,7 @@ function renderGradeDonut(g) {
     valArcs.forEach((p) => { p.setAttribute("stroke-width", sw); p.style.opacity = "1"; });
     legRows.forEach((row) => row.classList.remove("active"));
     detail.classList.add("muted");
-    detail.textContent = "Hover a slice or row for how it is graded.";
+    detail.textContent = "";
   };
   gradeBody.querySelectorAll(".grade-seg-hit").forEach((el) =>
     el.addEventListener("mouseenter", () => highlight(parseInt(el.dataset.i, 10))));
