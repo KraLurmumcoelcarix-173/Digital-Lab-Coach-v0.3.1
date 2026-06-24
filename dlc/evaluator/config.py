@@ -52,8 +52,14 @@ BENCH_CIRCUITS = [
     ("data/sample_circuits/tier3_realistic/tier3_latched_display.dig",
      "Latches an input value on a load signal and drives the latched value to the display output.",
      "A free-running counter: increments the displayed value on every clock edge regardless of inputs.",),
-    # ("C:/path/outside/repo/your_circuit_5.dig", "good goal ...", "wrong goal ...",),
-    # ("C:/path/outside/repo/your_circuit_6.dig", "good goal ...", "wrong goal ...",),
+     ("C:/Users/69450/Downloads/lab5grader/solution/lab5/cpu.dig", "A small stored-program CPU: each "
+     "clock cycle it fetches the next instruction from the program ROM, decodes it, and executes it on the "
+     "register file and ALU under the control unit, then advances the program counter.", "A traffic-light "
+     "controller that cycles one intersection through green, yellow, and red phases on a timer.",),
+     ("C:/Users/69450/Downloads/lab5grader/solution/lab5/register-file.dig", " A register file: two read ports"
+     " continuously drive ReadData1/ReadData2 from the registers addressed by ReadReg1/ReadReg2, while a clocked "
+     "write port stores WriteData into register WriteReg when RegWrite is asserted.", "A 4-bit ripple-carry adder "
+     "that outputs the sum of inputs A and B with a carry-out flag.",),
 ]
 
 

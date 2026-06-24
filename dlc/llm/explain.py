@@ -49,6 +49,53 @@ Lecture 24: Caching
 Lecture 25: Caching, Stack Review, Hardware Security Conceptual expanding
 """
 
+_SELECTOR_TYPES = {"Multiplexer", "Demultiplexer", "Decoder", "PriorityEncoder"}
+
+
+def _selector_facts(facts: dict) -> list[dict]:
+    """For each selector (mux/demux/decoder), map its data-input pins and
+    select pin to the component that drives each, so the LLM can state a
+    concrete select-value -> input mapping from topology instead of guessing."""
+    comps = facts.get("components", []) or []
+    nets = facts.get("nets", []) or []
+
+    def name(idx):
+        if not isinstance(idx, int) or idx < 0 or idx >= len(comps):
+            return None
+        c = comps[idx]
+        return c.get("label") or c.get("element_name")
+
+    net_driver = []
+    for net in nets:
+        drv = None
+        for p in net.get("pins", []):
+            if p.get("direction") == "out":
+                drv = name(p.get("component_index"))
+                break
+        net_driver.append(drv)
+
+    out = []
+    for i, c in enumerate(comps):
+        if c.get("element_name") not in _SELECTOR_TYPES:
+            continue
+        sel_drv = None
+        data = {}
+        for ni, net in enumerate(nets):
+            for p in net.get("pins", []):
+                if p.get("component_index") == i and p.get("direction") == "in":
+                    pn = p.get("pin_name") or "?"
+                    if pn == "sel":
+                        sel_drv = net_driver[ni]
+                    else:
+                        data[pn] = net_driver[ni]
+        if data or sel_drv:
+            out.append({
+                "selector": c.get("label") or c.get("element_name"),
+                "select_driven_by": sel_drv,
+                "data_inputs": dict(sorted(data.items())),
+            })
+    return out
+
 
 def _compact_facts(facts: dict) -> dict:
     return {
@@ -85,6 +132,7 @@ def _compact_facts(facts: dict) -> dict:
              "rows_sample": (t.get("rows_sample") or [])[:20]}
             for t in facts.get("testcases", [])
         ],
+        "selectors": _selector_facts(facts),
     }
 
 

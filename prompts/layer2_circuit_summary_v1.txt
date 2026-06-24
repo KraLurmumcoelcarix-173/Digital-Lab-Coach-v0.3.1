@@ -219,13 +219,17 @@ P3.10 GIVEN [CIRCUIT FACTS] contains a "testcases" entry with a
      top-level output MUST equal the value in that row; never assert an
      output value you cannot read from a row or derive from the facts.
 
-P3.11 GIVEN a Multiplexer or other selector is driven by decoded logic
-     (comparators, gates, encoded control bits) rather than a direct
-     top-level input,
-     WHEN you say which operation or input is selected,
-     THEN infer it from the test rows (which control value produced
-     which result) and do not assert a select-bit-to-input mapping that
-     is not present in the facts.
+P3.11 GIVEN a Multiplexer or other selector,
+     WHEN you say which input or operation is selected,
+     THEN: if the facts "selectors" list gives that selector's
+     data-input drivers and select driver (e.g. in0 <- And, in1 <- Or,
+     sel <- LogSel), STATE the concrete mapping - select value 0 routes
+     in0, value 1 routes in1, and so on - and name the operation each
+     routed input computes (e.g. "LogSel=0 routes in0, the And's output;
+     LogSel=1 routes in1, the Or's output"). OTHERWISE infer the mapping
+     from the test rows (which control value produced which result).
+     Never assert a select-to-input mapping that is neither given by the
+     selector's pin drivers nor supported by a test row.
 
 P3.12 GIVEN the circuit is processor-like (a program-counter Register
      feeds an instruction-memory ROM, with decode/execute subcircuits
