@@ -18,7 +18,7 @@
 | F7 | Combinational-loop checker | Done |
 | F8 | Interface conformance checker | Done |
 | F9 | Timing / sequential checker (register-clock-Q) | Done |
-| F10 | K-map / Boolean simplification PRO | TBD |
+| F10 | K-map / Boolean simplification PRO | Done |
 
 ## Layer 2 LLM conceptual explanation
 
@@ -42,7 +42,7 @@
 |---|---|:-:|
 | F17 | UI design | Ongoing |
 | F18 | Ablation condition controller | TBD |
-| F19 | Telemetry logger | TBD (frontend event log exists; SQLite sink TBD) |
+| F19 | Telemetry logger & Proxy Server | TBD (frontend event log exists; SQLite sink TBD) |
 | F20 | Digital source-code dig (Path-3 plugin viability) | TBD |
-| F21 | Evaluation harness | L2 benchmark harness done (`dlc/evaluator/`: 6-model competition, grader selection, Pareto plots) — awaiting the run; 30-bug L1/L3 ablation harness TBD |
+| F21 | Evaluation harness | L2 benchmark harness done (`dlc/evaluator/`: 6-model competition, grader selection, Pareto plots); 30-bug L1/L3 ablation harness TBD |
 | F22 | CLI interface | TBD |
