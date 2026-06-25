@@ -1224,9 +1224,11 @@ async function refreshModelCatalog() {
   }
 }
 
+const PRODUCTION_MODELS = ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"];
 function populateModelSelect(defaultModel) {
+  const offered = modelCatalog.filter((m) => PRODUCTION_MODELS.includes(m.id));
   const byProvider = {};
-  for (const m of modelCatalog) {
+  for (const m of offered) {
     (byProvider[m.provider] = byProvider[m.provider] || []).push(m);
   }
   const previous = l2ModelSelect.value;
@@ -1242,13 +1244,13 @@ function populateModelSelect(defaultModel) {
     html += `</optgroup>`;
   }
   l2ModelSelect.innerHTML = html;
-  const enabled = modelCatalog.filter((m) => m.key_configured).map((m) => m.id);
+  const enabled = offered.filter((m) => m.key_configured).map((m) => m.id);
   if (enabled.includes(previous)) {
     l2ModelSelect.value = previous;
+  } else if (defaultModel && enabled.includes(defaultModel)) {
+    l2ModelSelect.value = defaultModel;
   } else if (enabled.length > 0) {
     l2ModelSelect.value = enabled[0];
-  } else if (defaultModel) {
-    l2ModelSelect.value = defaultModel;
   }
 }
 
@@ -1564,7 +1566,7 @@ function renderCardDetail(card) {
           <img class="detail-img" src="/static/images/components/${escapeHtml(card.image)}"
                alt="${escapeHtml(card.display_name)}"
                onerror="this.onerror=null;this.src='/static/images/components/placeholder.png';" />
-          <div class="cf-hint">hover or tap to see it in the real world</div>
+          <div class="cf-hint">Try hover or tap</div>
         </div>
         <div class="cardflip-face cardflip-back">
           <img class="detail-img cf-realimg"
@@ -1578,8 +1580,8 @@ function renderCardDetail(card) {
       <div class="detail-head">
         <div class="detail-name">${escapeHtml(card.display_name)}</div>
         <div class="detail-meta">
-          <span class="pill-small">${escapeHtml(card.port_summary || "")}</span>
-          <span>transistors: ${escapeHtml(card.transistor_count || "?")}</span>
+          ${card.port_summary ? `<span class="pill-small">${escapeHtml(card.port_summary)}</span>` : ""}
+          ${tcount}
         </div>
       </div>
       <div class="detail-body">

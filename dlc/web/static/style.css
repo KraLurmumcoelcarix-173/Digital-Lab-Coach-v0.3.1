@@ -728,6 +728,7 @@ main {
   max-height: 350px;
   overflow-y: auto;
   padding-right: 4px;
+  padding-left: 10px;
   /* headroom so the first row's hover lift + shadow isn't clipped */
   padding-top: 8px;
 }
