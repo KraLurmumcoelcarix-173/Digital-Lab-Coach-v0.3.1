@@ -19,6 +19,7 @@
 | F8 | Interface conformance checker | Done |
 | F9 | Timing / sequential checker (register-clock-Q) | Done |
 | F10 | K-map / Boolean simplification PRO | Done |
+| F10.2 | Gate-minimization practice (Layer 5.2) | TBD — joins the K-map tab in the Practice surface |
 
 ## Layer 2 LLM conceptual explanation
 
