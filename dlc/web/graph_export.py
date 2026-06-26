@@ -7,6 +7,7 @@ Cytoscape.js consumes for rendering.
 from dlc.parser.models import Circuit
 from dlc.parser.netlist import NetList
 from dlc.facts.width import pin_width
+from dlc.facts.net_width import infer_net_widths
 
 
 _FAMILY_BY_ELEMENT: dict[str, str] = {
@@ -125,6 +126,10 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
     omitted 
     """
     child_by_index = _build_child_by_index(circuit)
+    # Single source of truth for bit width: the per-net inference. Computed
+    # once here so every edge on a given net reports the SAME width and so
+    # we don't keep a second, independently-drifting width path.
+    per_net, _conflicts = infer_net_widths(circuit, netlist)
     nodes = []
     for idx, comp in enumerate(circuit.components):
         family = _family(comp.element_name)
@@ -155,16 +160,22 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
         target_comp = circuit.components[v]
         driver_pin = data.get("driver_pin")
         sink_pin = data.get("sink_pin")
-        bits = _resolve_edge_bits(
-            circuit, driver_comp, driver_pin, target_comp, sink_pin,
-            child_by_index, u, v,
-        )
+        net_id = data.get("net_id")
+        # Prefer the per-net inferred width; fall back to the per-pin
+        # estimate only when the net's width couldn't be inferred.
+        info = per_net.get(net_id) if net_id is not None else None
+        bits = info.width if info is not None else None
+        if bits is None:
+            bits = _resolve_edge_bits(
+                circuit, driver_comp, driver_pin, target_comp, sink_pin,
+                child_by_index, u, v,
+            )
         edges.append({
             "data": {
                 "id": f"e{edge_id}",
                 "source": str(u),
                 "target": str(v),
-                "net_id": data.get("net_id"),
+                "net_id": net_id,
                 "driver_pin": driver_pin,
                 "sink_pin": sink_pin,
                 "bits": bits,
