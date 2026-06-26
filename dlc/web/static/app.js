@@ -136,6 +136,7 @@ const cardDetail    = document.getElementById("card-detail");
 const goalTextarea  = document.getElementById("goal-textarea");
 const goalCountEl   = document.getElementById("goal-count");
 const l2LlmBtn      = document.getElementById("l2-llm-btn");
+const l2StopBtn     = document.getElementById("l2-stop-btn");
 const l2LlmStatus   = document.getElementById("l2-llm-status");
 const l2LlmOutput   = document.getElementById("l2-llm-output");
 const graderSelect  = document.getElementById("grader-model-select");
@@ -1618,6 +1619,20 @@ goalTextarea.addEventListener("input", () => {
   goalCountEl.style.color = chars >= 500 ? "#b91c1c" : "";
 });
 
+let l2Abort = null;
+function l2BeginAbortable() {
+  l2Abort = new AbortController();
+  if (l2StopBtn) l2StopBtn.disabled = false;
+  return l2Abort.signal;
+}
+function l2EndAbortable() {
+  l2Abort = null;
+  if (l2StopBtn) l2StopBtn.disabled = true;
+}
+if (l2StopBtn) {
+  l2StopBtn.addEventListener("click", () => { if (l2Abort) l2Abort.abort(); });
+}
+
 l2LlmBtn.addEventListener("click", async () => {
   if (!sessionId || loaded.length === 0) {
     l2LlmStatus.textContent = "Load a circuit first.";
@@ -1654,6 +1669,7 @@ l2LlmBtn.addEventListener("click", async () => {
     return;
   }
 
+  const signal = l2BeginAbortable();
   l2LlmBtn.disabled = true;
   l2LlmStatus.innerHTML =
     `Talking to ${escapeHtml(selectedInfo ? selectedInfo.label : "the model")}` +
@@ -1677,11 +1693,22 @@ l2LlmBtn.addEventListener("click", async () => {
         test_summary: testSummary,
         model: selectedModel,
       }),
+      signal,
     });
   } catch (err) {
+    l2LlmBtn.disabled = false;
+    l2EndAbortable();
+    if (err.name === "AbortError") {
+      // Stopped during summarization -> grader was never triggered, so the
+      // grade panel stays untouched; show a red "Stopped" on the summary.
+      l2LlmStatus.textContent = "Stopped.";
+      l2LlmStatus.className = "l2-llm-status error";
+      l2LlmOutput.classList.remove("empty");
+      l2LlmOutput.innerHTML = `<div style="color:#dc2626;font-weight:600;">Stopped.</div>`;
+      return;
+    }
     l2LlmStatus.textContent = `Network error: ${err}`;
     l2LlmStatus.className = "l2-llm-status error";
-    l2LlmBtn.disabled = false;
     return;
   }
   l2LlmBtn.disabled = false;
@@ -1690,6 +1717,7 @@ l2LlmBtn.addEventListener("click", async () => {
     const t = await res.text();
     l2LlmStatus.textContent = `Server error ${res.status}: ${t}`;
     l2LlmStatus.className = "l2-llm-status error";
+    l2EndAbortable();
     return;
   }
   const payload = await res.json();
@@ -1698,6 +1726,7 @@ l2LlmBtn.addEventListener("click", async () => {
   if (!payload.ok) {
     l2LlmStatus.textContent = `Error: ${payload.error || "unknown"}`;
     l2LlmStatus.className = "l2-llm-status error";
+    l2EndAbortable();
     return;
   }
 
@@ -1706,6 +1735,7 @@ l2LlmBtn.addEventListener("click", async () => {
     l2LlmStatus.className = "l2-llm-status gated";
     l2LlmOutput.classList.remove("empty");
     l2LlmOutput.textContent = payload.gate_message;
+    l2EndAbortable();
     return;
   }
 
@@ -1715,8 +1745,10 @@ l2LlmBtn.addEventListener("click", async () => {
   l2LlmOutput.innerHTML = renderL2ParagraphCards(payload.text || "(empty response)");
   wireL2CardEvents();
 
-  // Grade the summary that was just shown.
+  // Grade the summary just shown, keeping the same abort scope so Stop also
+  // cancels grading; if there's nothing to grade, close the scope here.
   if (payload.text) gradeCurrentSummary(payload.text);
+  else l2EndAbortable();
 });
 
 // ---------- L2 summary grade: credibility donut + hover detail ----------
@@ -1750,6 +1782,9 @@ async function gradeCurrentSummary(summaryText) {
   if (!file || file.error) return;
   lastGradedSummary = summaryText;
   const graderModel = graderSelect ? graderSelect.value || null : null;
+  // Reuse the summarize flow's abort scope if present; a standalone re-grade
+  // (grader-dropdown change) opens its own so Stop works there too.
+  const signal = l2Abort ? l2Abort.signal : l2BeginAbortable();
 
   gradeBody.innerHTML =
     `<span class="muted">Grading with ${escapeHtml(graderModel || "default")}` +
@@ -1767,8 +1802,14 @@ async function gradeCurrentSummary(summaryText) {
         student_goal: goalTextarea.value.trim() || null,
         grader_model: graderModel,
       }),
+      signal,
     });
   } catch (err) {
+    l2EndAbortable();
+    if (err.name === "AbortError") {
+      gradeBody.innerHTML = `<span style="color:#dc2626;font-weight:600;">Grading stopped.</span>`;
+      return;
+    }
     gradeBody.innerHTML = `<span style="color:#b91c1c">Grade request failed: ${escapeHtml(String(err))}</span>`;
     return;
   }
@@ -1776,9 +1817,11 @@ async function gradeCurrentSummary(summaryText) {
   try { g = await res.json(); } catch { g = null; }
   if (!g || !g.ok) {
     gradeBody.innerHTML = `<span style="color:#b91c1c">${escapeHtml((g && g.error) || ("Grader error " + res.status))}</span>`;
+    l2EndAbortable();
     return;
   }
   renderGradeDonut(g);
+  l2EndAbortable();
 
   // One summary -> one grade. A low score only SUGGESTS a re-run; the
   // user decides (the old auto-retry silently re-clicked Summarize).
