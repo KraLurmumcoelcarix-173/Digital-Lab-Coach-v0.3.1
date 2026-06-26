@@ -32,15 +32,15 @@
 
 | # | Name | Status |
 |---|---|:-:|
-| F14 | Failed-test interpreter | Data side done (fast per-row runner: failing rows + expected-vs-found cells); LLM side TBD (`/api/llm/debug` coordinator + hypothesis cards) |
-| F15 | Test-writing coach | TBD |
-| F16 | Signal-flow narrator | TBD |
+| F14 | Failed-test interpreter | **L3 Mode A** (debug, when tests fail): hypothesis cards + animated wrong-signal-flow. Data side done (per-row runner: failing rows + expected-vs-found); LLM side TBD (`/api/llm/debug`) |
+| F15 | Test-writing coach | **L3 Mode B** (coverage): test-coverage analysis -> non-redundant new tests; gated on L1 clean + all tests pass; ROM/RISC-V -> more program + instruction-memory hints. TBD |
+| F16 | Signal-flow narrator | The failing-row animation; consumes the Layer-1 signal-flow-on-click output (`signal_path_components` / `animation_script`). TBD |
 
 ## Research infrastructure
 
 | # | Name | Status |
 |---|---|:-:|
-| F17 | UI design | Ongoing |
+| F17 | UI design | Ongoing — incl. **Layer 1 signal-flow-on-row-click** (real component shapes + per-component visual states + bus/split-merge coloring) |
 | F18 | Ablation condition controller | TBD |
 | F19 | Telemetry logger & Proxy Server | TBD (frontend event log exists; SQLite sink TBD) |
 | F20 | Digital source-code dig (Path-3 plugin viability) | TBD |
