@@ -97,21 +97,38 @@ def _selector_facts(facts: dict) -> list[dict]:
     return out
 
 
+
+def _io_compact(p: dict) -> dict:
+    bits = p.get("bit_width")
+    if bits is None:
+        bits = p.get("bits")
+    return {"label": p.get("label"), "bits": bits}
+
+
+def _subcircuit_compact(s: dict) -> dict:
+    if "resolved_path" in s or "resolution_error" in s:
+        resolved = s.get("resolved_path") is not None
+    else:
+        resolved = s.get("resolved")
+    out = {
+        "reference": s.get("reference"),
+        "resolved": resolved,
+        "resolution_error": s.get("resolution_error") or s.get("error"),
+    }
+    if s.get("child_inputs") is not None:
+        out["child_inputs"] = [_io_compact(c) for c in s.get("child_inputs")]
+    if s.get("child_outputs") is not None:
+        out["child_outputs"] = [_io_compact(c) for c in s.get("child_outputs")]
+    return out
+
+
 def _compact_facts(facts: dict) -> dict:
     return {
         "inventory": facts.get("inventory", {}),
-        "inputs": [
-            {"label": p.get("label"), "bits": p.get("bits")}
-            for p in facts.get("inputs", [])
-        ],
-        "outputs": [
-            {"label": p.get("label"), "bits": p.get("bits")}
-            for p in facts.get("outputs", [])
-        ],
+        "inputs": [_io_compact(p) for p in facts.get("inputs", [])],
+        "outputs": [_io_compact(p) for p in facts.get("outputs", [])],
         "subcircuits": [
-            {"reference": s.get("reference"),
-             "resolved": s.get("resolved")}
-            for s in facts.get("subcircuits", [])
+            _subcircuit_compact(s) for s in facts.get("subcircuits", [])
         ],
         "has_clock": "Clock" in (facts.get("inventory", {}) or {}),
         "has_register": "Register" in (facts.get("inventory", {}) or {}),
