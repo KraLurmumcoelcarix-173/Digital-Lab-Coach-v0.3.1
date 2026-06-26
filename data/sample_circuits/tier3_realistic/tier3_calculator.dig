@@ -313,6 +313,16 @@
       </elementAttributes>
       <pos x="140" y="-40"/>
     </visualElement>
+    <visualElement>
+      <elementName>XOr</elementName>
+      <elementAttributes>
+        <entry>
+          <string>wideShape</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="-240" y="-60"/>
+    </visualElement>
   </visualElements>
   <wires>
     <wire>
