@@ -784,7 +784,7 @@ def llm_explain(req: LlmExplainRequest) -> dict:
     # Deep on purpose: a structural error inside a subcircuit makes the
     # top-level summary unreliable, so it gates L2 like a top-level one.
     issues_payload = check_all_l1_deep(circuit).to_dict()["issues"]
-    student_goal = (req.student_goal or "").strip()[:1200]
+    student_goal = (req.student_goal or "").strip()[:500]
     if len(student_goal) == 0:
         student_goal = None
 
@@ -813,7 +813,7 @@ def llm_grade(req: LlmGradeRequest) -> dict:
     except Exception:
         facts_dict = circuit_summary(circuit, netlist)
 
-    student_goal = (req.student_goal or "").strip()[:1200] or None
+    student_goal = (req.student_goal or "").strip()[:500] or None
     return grade_summary(
         facts=facts_dict,
         summary_text=req.summary_text or "",
