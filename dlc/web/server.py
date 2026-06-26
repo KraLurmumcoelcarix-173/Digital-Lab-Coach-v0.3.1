@@ -13,8 +13,9 @@ Endpoints:
   POST /api/config/jar         set Digital.jar path
   GET  /api/config/jar/browse  open the native file picker on the server 
 
-  POST /api/tests              run per-row tests 
-  POST /api/llm/explain        Layer 3. 
+  POST /api/tests              run per-row tests
+  POST /api/llm/explain        Layer 2 conceptual summary
+  POST /api/llm/grade          Layer 2 summary credibility grade
 """
 from pathlib import Path
 import tempfile

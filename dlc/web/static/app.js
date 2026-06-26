@@ -1158,18 +1158,12 @@ jarSaveBtn.addEventListener("click", async () => {
 });
 
 
-llmStubBtn.addEventListener("click", async () => {
-  try {
-    const res = await fetch("/api/llm/explain", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-    const body = await res.text();
-    alert(`Layer 3 says: ${res.status} - ${body}`);
-  } catch (err) {
-    alert(`Layer 3 unreachable: ${err}`);
-  }
+llmStubBtn.addEventListener("click", () => {
+  alert(
+    "Layer 3 (strategic debugging coach) isn't built yet. It will turn a " +
+    "failing test row into step-by-step debugging hints, grounded on the " +
+    "deterministic per-row test runner — coming after the Layer 1 UI work.",
+  );
 });
 
 refreshJarChip();
