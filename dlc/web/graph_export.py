@@ -8,6 +8,7 @@ from dlc.parser.models import Circuit
 from dlc.parser.netlist import NetList
 from dlc.facts.width import pin_width
 from dlc.facts.net_width import infer_net_widths
+from dlc.parser.pin_geometry import inverted_input_names
 
 
 _FAMILY_BY_ELEMENT: dict[str, str] = {
@@ -119,6 +120,25 @@ def _resolve_edge_bits(
                     return int(c.attributes.get("Bits", 1))
     return None
 
+def _synthetic_not_node(node_id: str, gate_comp) -> dict:
+    """A visible NOT glyph standing in for a gate's inverter bubble
+    (inverterConfig). Not a real component — flagged `synthetic` so the
+    overlay / L3 can tell it apart from a true Not element."""
+    return {
+        "data": {
+            "id": node_id,
+            "label": "NOT",
+            "element_name": "Not",
+            "comp_label": "",
+            "family": "gate",
+            "family_display": _family_display("gate"),
+            "attributes": {"bubble": True},
+            "x_dig": gate_comp.position.x - 40,
+            "y_dig": gate_comp.position.y,
+            "synthetic": True,
+        },
+    }
+
 def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
     """
     Build {"nodes": [...], "edges": [...]} in Cytoscape.js Elements
@@ -153,8 +173,18 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
             },
         })
 
+   # Gates whose inputs carry an inverter bubble: render the bubble as a
+    # visible NOT node spliced onto the wire feeding that input, so the
+    # inversion isn't silently hidden inside the gate.
+    inverted_by_comp = {}
+    for idx, comp in enumerate(circuit.components):
+        inv = inverted_input_names(comp)
+        if inv:
+            inverted_by_comp[idx] = set(inv)
+
     edges = []
     edge_id = 0
+    not_node_ids: dict = {}
     for u, v, data in graph.edges(data=True):
         driver_comp = circuit.components[u]
         target_comp = circuit.components[v]
@@ -170,18 +200,40 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
                 circuit, driver_comp, driver_pin, target_comp, sink_pin,
                 child_by_index, u, v,
             )
-        edges.append({
-            "data": {
-                "id": f"e{edge_id}",
-                "source": str(u),
-                "target": str(v),
-                "net_id": net_id,
-                "driver_pin": driver_pin,
-                "sink_pin": sink_pin,
+
+        if v in inverted_by_comp and sink_pin in inverted_by_comp[v]:
+            # splice driver -> NOT -> gate(inverted input)
+            key = (v, sink_pin)
+            not_id = not_node_ids.get(key)
+            if not_id is None:
+                not_id = f"not-{v}-{sink_pin}"
+                not_node_ids[key] = not_id
+                nodes.append(_synthetic_not_node(not_id, target_comp))
+            edges.append({"data": {
+                "id": f"e{edge_id}", "source": str(u), "target": not_id,
+                "net_id": net_id, "driver_pin": driver_pin, "sink_pin": "A",
                 "bits": bits,
-            },
-        })
-        edge_id += 1
+            }})
+            edge_id += 1
+            edges.append({"data": {
+                "id": f"e{edge_id}", "source": not_id, "target": str(v),
+                "net_id": net_id, "driver_pin": "Y", "sink_pin": sink_pin,
+                "bits": bits,
+            }})
+            edge_id += 1
+        else:
+            edges.append({
+                "data": {
+                    "id": f"e{edge_id}",
+                    "source": str(u),
+                    "target": str(v),
+                    "net_id": net_id,
+                    "driver_pin": driver_pin,
+                    "sink_pin": sink_pin,
+                    "bits": bits,
+                },
+            })
+            edge_id += 1
 
     return {"nodes": nodes, "edges": edges}
 
