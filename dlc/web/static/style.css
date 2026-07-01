@@ -569,8 +569,7 @@ main {
               rgba(6, 17, 10, 0.10), rgba(6, 17, 10, 0.30));
   animation: snow-fade 1.5s ease-out forwards;
 }
-.wipe-sheet {
-  @keyframes snow-fade { 0% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes snow-fade { 0% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
 
 .snow-overlay .flake {
   position: absolute;
@@ -1339,4 +1338,3 @@ main {
   font-style: italic;
 }
 
-}
