@@ -166,7 +166,12 @@ def _not_svg(comp: Component, fill: str) -> dict:
 # Multiplexer / Decoder / PriorityEncoder (selector-bit sized)
 # --------------------------------------------------------------------------
 
-def _mux_svg(comp: Component, fill: str) -> dict | None:
+def _ring(cx, cy) -> str:
+    return (f'<circle cx="{cx}" cy="{cy:.1f}" r="5" fill="none" '
+            f'stroke="#f59e0b" stroke-width="2.2"/>')
+
+
+def _mux_svg(comp: Component, fill: str, sel: int | None = None) -> dict | None:
     sel_bits = max(1, int(comp.attributes.get("Selector Bits", 1) or 1))
     n = 2 ** sel_bits
     if sel_bits > _SEL_BOX_MAX:
@@ -190,18 +195,21 @@ def _mux_svg(comp: Component, fill: str) -> dict | None:
         parts.append(_stub(0, y, lx, y))
     parts.append(_stub(rx, (top + bot) / 2, w, (top + bot) / 2))   # out
     parts.append(_stub((lx + rx) / 2, bot - inset / 2, (lx + rx) / 2, h))  # sel
+        # determined reaction: ring the selected data input
+    if sel is not None and 0 <= sel < n:
+        parts.append(_ring(lx, ys[sel]))
     return {"svg": _data_uri(_svg(w, h, "".join(parts))), "w": w, "h": h,
             "tier": "glyph"}
 
 
-def _decoder_svg(comp: Component, fill: str) -> dict | None:
+def _decoder_svg(comp: Component, fill: str, sel: int | None = None) -> dict | None:
     sel_bits = max(1, int(comp.attributes.get("Selector Bits", 1) or 1))
     n_out = 2 ** sel_bits
     if sel_bits > _SEL_BOX_MAX:
         return _failed_box(f"DEC 2^{sel_bits}", fill)
     if sel_bits > _MUX_GLYPH_SEL:
         return _plain_box("DEC", n_out, fill, side="out", sublabel=f"2^{sel_bits}")
-    return _port_box(comp, fill, n_left=1, n_right=n_out, label="DEC")
+    return _port_box(comp, fill, n_left=1, n_right=n_out, label="DEC", ring_right=sel)
 
 
 def _priority_svg(comp: Component, fill: str) -> dict | None:
@@ -263,22 +271,31 @@ def _range_label(grp) -> str:
 # Seven-seg
 # --------------------------------------------------------------------------
 
-def _seven_seg_svg(comp: Component, fill: str) -> dict:
-    w, h = 44, 60
-    # simple static 7-seg outline (all segments faint; lighting is a later task)
-    seg = '#c9c9c9'
+_SEG_ON = "#e11d48"
+_SEG_OFF = "#e5e7eb"
+
+
+def _seven_seg_svg(comp: Component, fill: str, lit: dict | None = None) -> dict:
+    """Static outline by default; when `lit` (a {segment: truthy} map from the
+    evaluated row) is given, lit segments glow red — the "determined" reaction."""
+    w, h = 44, 62
+    x0, x1 = 12, 32
+    yt, ym, yb = 12, 32, 52
     parts = [f'<rect x="2" y="2" width="{w-4}" height="{h-4}" rx="3" '
              f'fill="{fill}" stroke="{_STROKE}" stroke-width="1.4"/>']
-    x0, x1 = 12, 32
-    ys = [12, 30, 48]
-    # horizontal segments a,g,d
-    for y in ys:
-        parts.append(f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="{seg}" stroke-width="3"/>')
-    # verticals b,c (right) and f,e (left)
-    parts.append(f'<line x1="{x1}" y1="12" x2="{x1}" y2="30" stroke="{seg}" stroke-width="3"/>')
-    parts.append(f'<line x1="{x1}" y1="30" x2="{x1}" y2="48" stroke="{seg}" stroke-width="3"/>')
-    parts.append(f'<line x1="{x0}" y1="12" x2="{x0}" y2="30" stroke="{seg}" stroke-width="3"/>')
-    parts.append(f'<line x1="{x0}" y1="30" x2="{x0}" y2="48" stroke="{seg}" stroke-width="3"/>')
+    # a,b,c,d,e,f,g are the standard segments; dp is the dot.
+    segs = {
+        "a": (x0, yt, x1, yt), "g": (x0, ym, x1, ym), "d": (x0, yb, x1, yb),
+        "f": (x0, yt, x0, ym), "b": (x1, yt, x1, ym),
+        "e": (x0, ym, x0, yb), "c": (x1, ym, x1, yb),
+    }
+    for name, (ax, ay, bx, by) in segs.items():
+        on = bool(lit and lit.get(name))
+        parts.append(f'<line x1="{ax}" y1="{ay}" x2="{bx}" y2="{by}" '
+                     f'stroke="{_SEG_ON if on else _SEG_OFF}" stroke-width="4" '
+                     f'stroke-linecap="round"/>')
+    dp_on = bool(lit and lit.get("dp"))
+    parts.append(f'<circle cx="37" cy="{yb}" r="2.5" fill="{_SEG_ON if dp_on else _SEG_OFF}"/>')
     return {"svg": _data_uri(_svg(w, h, "".join(parts))), "w": w, "h": h,
             "tier": "glyph"}
 
@@ -288,7 +305,7 @@ def _seven_seg_svg(comp: Component, fill: str) -> dict:
 # --------------------------------------------------------------------------
 
 def _port_box(comp: Component, fill: str, n_left: int, n_right: int,
-              label: str) -> dict:
+              label: str, ring_right: int | None = None) -> dict:
     rows = max(n_left, n_right, 1)
     pad = 12
     span = max(1, rows - 1) * 13
@@ -301,8 +318,12 @@ def _port_box(comp: Component, fill: str, n_left: int, n_right: int,
              f'text-anchor="middle" fill="{_STROKE}">{label}</text>']
     for y in _even_ys(n_left, top, top + span):
         parts.append(_stub(0, y, lx, y))
-    for y in _even_ys(n_right, top, top + span):
+    r_ys = _even_ys(n_right, top, top + span)
+    for y in r_ys:
         parts.append(_stub(rx, y, w, y))
+    # determined reaction: ring the asserted output
+    if ring_right is not None and 0 <= ring_right < len(r_ys):
+        parts.append(_ring(rx, r_ys[ring_right]))
     return {"svg": _data_uri(_svg(w, h, "".join(parts))), "w": w, "h": h,
             "tier": "glyph"}
 
@@ -556,6 +577,30 @@ def _draw_glyph(comp: Component, fill: str, name: str) -> dict | None:
             return _box_with_pins(comp, fill, label="ROM")
         if name == "BitExtender":
             return _bitextender_svg(comp, fill)
+    except Exception:
+        return None
+    return None
+
+def react_svg(comp: Component, family: str, state: dict) -> str | None:
+    """Return a *reacted* glyph data-URI for a clicked row, or None if this part
+    has no determined reaction. Same w/h as the base glyph, so the front end
+    just swaps the node's background-image.
+
+      Seven-Seg -> segments lit from state["segments"] ({seg: truthy})
+      Multiplexer / Decoder -> ring the selected input / asserted output
+        from state["sel"] (the evaluated selector value)
+    """
+    fill = _FAMILY_FILL.get(family, "#e9ecef")
+    name = comp.element_name
+    try:
+        if name == "Seven-Seg":
+            return _seven_seg_svg(comp, fill, lit=state.get("segments"))["svg"]
+        if name == "Multiplexer":
+            res = _mux_svg(comp, fill, sel=state.get("sel"))
+            return res["svg"] if res else None
+        if name == "Decoder":
+            res = _decoder_svg(comp, fill, sel=state.get("sel"))
+            return res["svg"] if res else None
     except Exception:
         return None
     return None

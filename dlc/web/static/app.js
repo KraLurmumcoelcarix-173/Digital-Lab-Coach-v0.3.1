@@ -1165,6 +1165,8 @@ function clearSignalFlow() {
     cy.nodes().forEach((n) => {
       const base = n.data("baseLabel");
       if (base != null) n.data("label", base);
+      const baseShape = n.data("baseShape");   // restore reacted glyph
+      if (baseShape != null) n.data("shape_svg", baseShape);
     });
   });
 }
@@ -1198,6 +1200,15 @@ function applySignalFlow(sim) {
         n.addClass("sig-mismatch");
         n.data("label", n.data("baseLabel") + "\n⚠ exp " + o.expected + " / got " + o.found);
       });
+    });
+        // determined per-component reactions: swap in the reacted glyph
+    // (7-seg lit segments, mux/decoder selected-port ring).
+    const svgs = sim.node_svgs || {};
+    Object.keys(svgs).forEach((id) => {
+      const n = cy.getElementById(id);
+      if (!n || n.empty()) return;
+      if (n.data("baseShape") == null) n.data("baseShape", n.data("shape_svg"));
+      n.data("shape_svg", svgs[id]);
     });
   });
 }

@@ -700,6 +700,42 @@ def run_tests(req: TestsRequest) -> dict:
         "specs": spec_payloads,
     }
 
+def _node_reactions(circuit, netlist, res) -> dict:
+    """Determined per-node reactions for a clicked row, as reacted glyph
+    data-URIs the front end swaps in: Seven-Seg segment lighting and
+    Multiplexer/Decoder selected-port rings. Purely visual."""
+    from collections import defaultdict
+    from dlc.web.shape_svg import react_svg
+    from dlc.web.graph_export import _family
+
+    comp_pins: dict[int, list] = defaultdict(list)
+    for net in netlist.nets:
+        for p in net.pins:
+            comp_pins[p.component_index].append(
+                (p.pin_name, p.direction, net.net_id))
+
+    nv = res.net_values
+    out: dict[str, str] = {}
+    for idx, comp in enumerate(circuit.components):
+        name = comp.element_name
+        if name == "Seven-Seg":
+            segs = {pn: bool(nv[nid]) for pn, d, nid in comp_pins.get(idx, [])
+                    if d == "in" and nid in nv}
+            if segs:
+                svg = react_svg(comp, _family(name), {"segments": segs})
+                if svg:
+                    out[str(idx)] = svg
+        elif name in ("Multiplexer", "Decoder"):
+            sel = next((nv[nid] for pn, d, nid in comp_pins.get(idx, [])
+                        if pn == "sel" and nid in nv), None)
+            if sel is not None:
+                svg = react_svg(comp, _family(name), {"sel": int(sel)})
+                if svg:
+                    out[str(idx)] = svg
+    return out
+
+
+
 @app.post("/api/simulate")
 def simulate_row(req: SimulateRequest) -> dict:
     """Signal-flow values for one clicked test row.
@@ -776,6 +812,8 @@ def simulate_row(req: SimulateRequest) -> dict:
         "unresolved_nets": sorted(res.unresolved_nets),
         "outputs": outputs,
         "notes": res.notes,
+        # determined per-node reactions (7-seg lighting, mux/decoder rings)
+        "node_svgs": _node_reactions(circuit, netlist, res),
     }
 
 

@@ -8,7 +8,7 @@ bubbles, and that undecorated parts fall back to the default (None).
 import base64
 
 from dlc.parser.models import Component, Position
-from dlc.web.shape_svg import shape_for
+from dlc.web.shape_svg import shape_for, react_svg, port_endpoints
 
 
 def _c(element, **attrs):
@@ -18,6 +18,10 @@ def _c(element, **attrs):
 
 def _svg_text(res):
     return base64.b64decode(res["svg"].split(",", 1)[1]).decode()
+
+def _uri_text(uri):
+    return base64.b64decode(uri.split(",", 1)[1]).decode()
+
 
 
 def test_gate_is_a_glyph_with_valid_svg_data_uri():
@@ -101,3 +105,45 @@ def test_not_and_seven_seg_render():
     assert shape_for(_c("Not"), "gate")["tier"] == "glyph"
     ss = shape_for(_c("Seven-Seg"), "other")
     assert ss["tier"] == "glyph" and ss["h"] > ss["w"]  # tall display
+
+
+
+# ---- determined reactions --------------------------------------------------
+
+def test_seven_seg_lights_only_the_on_segments():
+    # digit-"1" pattern: only b and c on
+    uri = react_svg(_c("Seven-Seg"), "other",
+                    {"segments": {"b": 1, "c": 1, "a": 0, "d": 0, "e": 0, "f": 0, "g": 0}})
+    svg = _uri_text(uri)
+    assert svg.count("#e11d48") == 2   # exactly two lit segments
+    # base glyph (no reaction) lights nothing
+    assert _svg_text(shape_for(_c("Seven-Seg"), "other")).count("#e11d48") == 0
+
+
+def test_mux_and_decoder_ring_the_selected_port():
+    mux = _uri_text(react_svg(_c("Multiplexer", **{"Selector Bits": 2}), "mux", {"sel": 2}))
+    dec = _uri_text(react_svg(_c("Decoder", **{"Selector Bits": 2}), "mux", {"sel": 1}))
+    assert mux.count("#f59e0b") == 1   # one ring on the selected input
+    assert dec.count("#f59e0b") == 1   # one ring on the asserted output
+    # base glyphs carry no ring
+    assert "#f59e0b" not in _svg_text(shape_for(_c("Multiplexer", **{"Selector Bits": 2}), "mux"))
+
+
+def test_react_svg_is_none_for_non_reactive_parts():
+    assert react_svg(_c("And", Inputs=2), "gate", {}) is None
+    assert react_svg(_c("Add"), "arith", {}) is None
+
+
+# ---- port anchoring --------------------------------------------------------
+
+def test_glyph_carries_port_endpoints_ordered_top_to_bottom():
+    ports = shape_for(_c("And", Inputs=3), "gate")["ports"]
+    assert all(ports[f"in{i}"].startswith("-") for i in range(3))   # left edge
+    ys = [float(ports[f"in{i}"].split()[1].rstrip("%")) for i in range(3)]
+    assert ys == sorted(ys)
+
+
+def test_mux_sel_endpoint_is_on_the_bottom_edge():
+    ports = shape_for(_c("Multiplexer", **{"Selector Bits": 2}), "mux")["ports"]
+    assert float(ports["sel"].split()[1].rstrip("%")) > 30   # near the bottom
+    assert ports["in0"].startswith("-")
