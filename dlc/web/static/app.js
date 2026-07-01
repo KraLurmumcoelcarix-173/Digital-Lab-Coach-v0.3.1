@@ -251,6 +251,7 @@ let currentIdx  = 0;
 let cy          = null;
 let sigActive   = null;   // {specIdx, rowIdx} of the row driving the overlay
 let clockTimer  = null;   // set while the clock is ticking through rows
+let clockDone   = false;  // true once ticking reached the last row (offer restart)
 
 
 fileInput.addEventListener("change", async () => {
@@ -497,7 +498,7 @@ function renderGraph(graph) {
   // Click the Clock glyph to tick the signal flow through the rest of the rows.
   cy.on("tap", "node", (evt) => {
     if (evt.target.data("element_name") !== "Clock") return;
-    if (clockTimer) stopClockTick(); else startClockTick();
+    toggleClock();
   });
 }
 
@@ -1192,11 +1193,26 @@ function ensureClockHud() {
       }
       box.parentElement.appendChild(hud);
     }
-    hud.addEventListener("click", () => {
-      if (clockTimer) stopClockTick(); else startClockTick();
-    });
+    hud.addEventListener("click", toggleClock);
   }
   return hud;
+}
+
+// One entry point for the clock affordance (HUD click or the Clock glyph):
+// stop while running, restart from the top when finished, else start.
+function toggleClock() {
+  if (clockTimer) stopClockTick();
+  else if (clockDone) restartClockTick();
+  else startClockTick();
+}
+
+function restartClockTick() {
+  if (!sigActive) return;
+  const rows = rowsForSpec(sigActive.specIdx);
+  if (!rows.length) return;
+  sigActive = { specIdx: sigActive.specIdx, rowIdx: rows[0] };
+  clockDone = false;
+  startClockTick();
 }
 
 function hideClockHud() {
@@ -1252,13 +1268,16 @@ function startClockTick() {
     hud.style.display = "block";
     if (i + 1 < rows.length) {
       i += 1;
-      clockTimer = setTimeout(step, 750);
+      clockTimer = setTimeout(step, 1500);
     } else {
       clockTimer = null;
-      hud.textContent = `⏱ done — ${rows.length} rows`;
-      setTimeout(() => { if (clockTimer === null) updateClockHint(); }, 1600);
+      clockDone = true;
+      hud.className = "clock-hud restart";
+      hud.textContent = `⟲ restart — ${rows.length} rows ticked`;
+      hud.style.display = "block";
     }
   };
+  clockDone = false;
   clockTimer = true;   // mark running before the first (async) step
   step();
 }
@@ -1326,6 +1345,8 @@ testsResultsEl.addEventListener("click", (evt) => {
   const specIdx = parseInt(tr.getAttribute("data-spec"), 10);
   const rowIdx = parseInt(tr.getAttribute("data-row"), 10);
   if (Number.isNaN(specIdx) || Number.isNaN(rowIdx)) return;
+  stopClockTick();          // a manual pick ends any tick run / restart state
+  clockDone = false;
   showSignalFlowForRow(specIdx, rowIdx, tr);
 });
 

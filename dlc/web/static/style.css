@@ -555,6 +555,7 @@ main {
   user-select: none;
 }
 .clock-hud.running { background: #fef3c7; font-weight: 600; }
+.clock-hud.restart { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; font-weight: 600; }
 
 /* A test row you can click to light up the signal-flow graph. */
 .tests-results tr.sig-clickable { cursor: pointer; }
