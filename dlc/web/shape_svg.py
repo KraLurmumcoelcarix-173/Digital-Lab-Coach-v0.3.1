@@ -426,9 +426,11 @@ def _clock_svg(comp, fill) -> dict:
     return {"svg": _data_uri(_svg(w, h, "".join(parts))), "w": w, "h": h, "tier": "glyph"}
 
 
-def _box_with_pins(comp, fill, *, label="", symbol="", clock_pin=None) -> dict:
+def _box_with_pins(comp, fill, *, label="", symbol="", clock_pin=None,
+                   value_text=None) -> dict:
     """Rectangle sized to the component's real in/out pins, with an optional
-    centre symbol and a clock-edge triangle on `clock_pin`."""
+    centre symbol and a clock-edge triangle on `clock_pin`. `value_text` (a
+    reaction) shows the stored/current value prominently with the label above."""
     pins = get_pin_specs(comp)
     ins = [p for p in pins if p.direction == "in"]
     outs = [p for p in pins if p.direction == "out"]
@@ -442,7 +444,13 @@ def _box_with_pins(comp, fill, *, label="", symbol="", clock_pin=None) -> dict:
     mid = top + span / 2
     parts = [f'<rect x="{lx}" y="{top-8}" width="{rx-lx}" height="{span+16}" rx="3" '
              f'fill="{fill}" stroke="{_STROKE}" stroke-width="1.6"/>']
-    if symbol:
+    if value_text is not None:
+        if label:
+            parts.append(f'<text x="{cx}" y="{top-1:.1f}" font-size="6.5" '
+                         f'text-anchor="middle" fill="#64748b">{_esc(label)}</text>')
+        parts.append(f'<text x="{cx}" y="{mid+4:.1f}" font-size="9" font-weight="bold" '
+                     f'text-anchor="middle" fill="#1e3a8a">{_esc(value_text)}</text>')
+    elif symbol:
         parts.append(f'<text x="{cx}" y="{mid+5:.1f}" font-size="15" font-weight="bold" '
                      f'text-anchor="middle" fill="{_STROKE}">{_esc(symbol)}</text>')
     elif label:
@@ -589,6 +597,7 @@ def react_svg(comp: Component, family: str, state: dict) -> str | None:
       Seven-Seg -> segments lit from state["segments"] ({seg: truthy})
       Multiplexer / Decoder -> ring the selected input / asserted output
         from state["sel"] (the evaluated selector value)
+      Register -> show the stored value from state["value"] (reset assumed 0)
     """
     fill = _FAMILY_FILL.get(family, "#e9ecef")
     name = comp.element_name
@@ -601,6 +610,9 @@ def react_svg(comp: Component, family: str, state: dict) -> str | None:
         if name == "Decoder":
             res = _decoder_svg(comp, fill, sel=state.get("sel"))
             return res["svg"] if res else None
+        if name == "Register":
+            return _box_with_pins(comp, fill, label="reg", clock_pin="C",
+                                  value_text=state.get("value"))["svg"]
     except Exception:
         return None
     return None

@@ -732,6 +732,18 @@ def _node_reactions(circuit, netlist, res) -> dict:
                 svg = react_svg(comp, _family(name), {"sel": int(sel)})
                 if svg:
                     out[str(idx)] = svg
+        elif name == "Register":
+            # show the value the register holds at this row (reset assumed 0,
+            # advanced by the sequential replay / clock ticks).
+            q = next(((nv[nid], res.net_bits.get(nid, 1))
+                      for pn, d, nid in comp_pins.get(idx, [])
+                      if pn == "Q" and nid in nv), None)
+            if q is not None:
+                qv, qbits = q
+                vt = f"0x{qv:X}" if qbits > 1 else str(qv)
+                svg = react_svg(comp, _family(name), {"value": vt})
+                if svg:
+                    out[str(idx)] = svg
     return out
 
 
