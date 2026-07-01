@@ -48,6 +48,25 @@ const CY_STYLE = [
       "padding": "4px",
     },
   },
+    // Nodes that carry a parametric glyph (gate/mux/decoder/splitter/…): draw
+  // the inline-SVG as the node body, sized to it, with the label underneath.
+  {
+    selector: "node[shape_svg]",
+    style: {
+      "shape": "rectangle",
+      "background-image": "data(shape_svg)",
+      "background-fit": "contain",
+      "background-opacity": 0,
+      "border-width": 0,
+      "width": "data(shape_w)",
+      "height": "data(shape_h)",
+      "text-valign": "bottom",
+      "text-halign": "center",
+      "text-margin-y": 2,
+      "font-size": 8,
+      "text-max-width": 80,
+    },
+  },
   { selector: "node.faded", style: { "opacity": 0.22 } },
   {
     selector: "edge",

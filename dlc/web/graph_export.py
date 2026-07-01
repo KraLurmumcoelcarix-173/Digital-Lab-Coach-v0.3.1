@@ -9,6 +9,7 @@ from dlc.parser.netlist import NetList
 from dlc.facts.width import pin_width
 from dlc.facts.net_width import infer_net_widths
 from dlc.parser.pin_geometry import inverted_input_names
+from dlc.web.shape_svg import shape_for
 
 
 _FAMILY_BY_ELEMENT: dict[str, str] = {
@@ -155,23 +156,31 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
         family = _family(comp.element_name)
         if family in ("annotation", "tunnel"):
             continue
-        nodes.append({
-            "data": {
-                "id": str(idx),
-                "label": _node_display_label(idx, comp),
-                "element_name": comp.element_name,
-                "comp_label": comp.label or "",
-                "family": family,
-                "family_display": _family_display(family),
-                "attributes": {
-                    k: v for k, v in comp.attributes.items()
-                    if isinstance(v, (str, int, float, bool))
-                    and k not in _HIDDEN_ATTRS
-                },
-                "x_dig": comp.position.x,
-                "y_dig": comp.position.y,
+        data = {
+            "id": str(idx),
+            "label": _node_display_label(idx, comp),
+            "element_name": comp.element_name,
+            "comp_label": comp.label or "",
+            "family": family,
+            "family_display": _family_display(family),
+            "attributes": {
+                k: v for k, v in comp.attributes.items()
+                if isinstance(v, (str, int, float, bool))
+                and k not in _HIDDEN_ATTRS
             },
-        })
+            "x_dig": comp.position.x,
+            "y_dig": comp.position.y,
+        }
+        # Optional parametric glyph (gate/mux/decoder/splitter/…). Absent for
+        # components we don't specially draw — the front end keeps the default
+        # round-rectangle for those.
+        glyph = shape_for(comp, family)
+        if glyph is not None:
+            data["shape_svg"] = glyph["svg"]
+            data["shape_w"] = glyph["w"]
+            data["shape_h"] = glyph["h"]
+            data["shape_tier"] = glyph["tier"]
+        nodes.append({"data": data})
 
    # Gates whose inputs carry an inverter bubble: render the bubble as a
     # visible NOT node spliced onto the wire feeding that input, so the
