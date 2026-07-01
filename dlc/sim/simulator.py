@@ -44,9 +44,12 @@ class SimResult:
     unresolved_nets: set[int] = field(default_factory=set)
     output_values: dict[str, int] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
-     # register comp_index -> next Q (value latched on the coming clock edge),
-    # for the sequential replay in simulate_sequential().
-    reg_next: dict[int, int] = field(default_factory=dict)
+    # register *path* -> next Q (value latched on the coming clock edge), for the
+    # sequential replay in simulate_sequential(). A path is the tuple of
+    # component indices from the top circuit down to the register, so registers
+    # nested inside subcircuits (e.g. a register file) get distinct keys and
+    # their state survives across rows.
+    reg_next: dict[tuple[int, ...], int] = field(default_factory=dict)
 
 
 def _mask(bits: int) -> int:
@@ -353,17 +356,31 @@ def simulate(
     inputs: dict[str, int],
     *,
     state: dict[int, int] | None = None,
+    state_store: dict[tuple[int, ...], int] | None = None,
+    path: tuple[int, ...] = (),
     _depth: int = 0,
     _max_depth: int = 16,
 ) -> SimResult:
     """Evaluate `circuit` combinationally for one input assignment.
 
-    `state` (register comp_index -> current Q) seeds sequential elements so a
-    single combinational pass sees the stored value; the caller
-    (`simulate_sequential`) advances it across clock edges.
+    `state_store` maps a register *path* (top-to-register component indices) to
+    its current Q, seeding sequential elements at every nesting level so a single
+    combinational pass sees stored values even for registers buried inside
+    subcircuits (a register file). `path` is this circuit's own prefix within
+    that store. The caller (`simulate_sequential`) advances the store across
+    clock edges. `state` is the legacy top-level-only form ({comp_index -> Q});
+    it is folded into `state_store` for backward compatibility.
     """
     result = SimResult()
-    state = state or {}
+    if state_store is None:
+        state_store = {}
+    if state:
+        for k, v in state.items():
+            key = k if isinstance(k, tuple) else path + (k,)
+            state_store.setdefault(key, v)
+
+    def reg_state(idx: int) -> int:
+        return state_store.get(path + (idx,), 0)
 
     # Bit width per net — single source of truth, matches the edge widths.
     per_net, _conflicts = infer_net_widths(circuit, netlist)
@@ -412,7 +429,7 @@ def simulate(
         elif comp.element_name == "Register":
             q_net = pin_net(idx, "Q")
             if q_net is not None:
-                set_net(q_net, state.get(idx, 0))
+                set_net(q_net, reg_state(idx))
 
     # Worklist fixpoint. A hard iteration cap (component count + slack) bounds
     # runtime and guarantees termination on cyclic / stateful topologies.
@@ -425,7 +442,14 @@ def simulate(
             if not pins:
                 continue
             out_nets = [nid for name, d, nid in pins if d == "out"]
-            if out_nets and all(nid in net_values for nid in out_nets):
+            # Plain components are done once their outputs are set. Subcircuits
+            # keep re-evaluating even then: a register file's ReadData resolves
+            # early (from read address), but its internal registers' next-state
+            # depends on write-side inputs that arrive later, and that reg_next
+            # must reach the final value before the clock edge latches it. The
+            # sub_cache keeps this cheap when the resolved inputs are unchanged.
+            if (out_nets and all(nid in net_values for nid in out_nets)
+                    and not comp.element_name.endswith(".dig")):
                 continue  # already fully resolved
 
             in_vals: dict[str, int] = {}
@@ -450,11 +474,16 @@ def simulate(
                 sig = frozenset(in_vals.items())
                 cached = sub_cache.get(idx)
                 if cached is not None and cached[0] == sig:
-                    outs = cached[1]
+                    outs, child_rn = cached[1], cached[2]
                 else:
-                    outs = _eval_node(comp, idx, in_vals, child_by_index,
-                                      _depth, _max_depth)
-                    sub_cache[idx] = (sig, outs)
+                    outs, child_rn = _eval_subcircuit(
+                        comp, idx, in_vals, child_by_index, _depth, _max_depth,
+                        state_store, path)
+                    sub_cache[idx] = (sig, outs, child_rn)
+                # Bubble the subcircuit's (path-keyed) register next-states up so
+                # simulate_sequential can latch them on the shared clock edge.
+                if child_rn:
+                    result.reg_next.update(child_rn)
             else:
                 outs = _eval_node(comp, idx, in_vals, child_by_index,
                                   _depth, _max_depth)
@@ -480,7 +509,8 @@ def simulate(
             enabled = True
             if en_net is not None and en_net in net_values:
                 enabled = bool(net_values[en_net])
-            result.reg_next[idx] = net_values[d_net] if enabled else state.get(idx, 0)
+            result.reg_next[path + (idx,)] = (
+                net_values[d_net] if enabled else reg_state(idx))
 
     # Collect top-level output values + record unresolved signal-carrying nets.
     for idx, comp in enumerate(circuit.components):
@@ -527,18 +557,21 @@ def simulate_sequential(
     if target is None:
         return SimResult()
 
-    reg_state: dict[int, int] = {}
+    # Path-keyed register state (see SimResult.reg_next); covers registers
+    # nested inside subcircuits so a register file's contents persist row to row.
+    reg_state: dict[tuple[int, ...], int] = {}
 
     def apply_row(row) -> SimResult:
         nonlocal reg_state
         inp = inputs_for_row(circuit, spec.headers, row)
-        res = simulate(circuit, netlist, graph, inp, state=reg_state)
+        res = simulate(circuit, netlist, graph, inp, state_store=dict(reg_state))
         if _row_has_clock_edge(circuit, spec.headers, row):
             new_state = dict(reg_state)
             new_state.update(res.reg_next)
             reg_state = new_state
             # Re-settle so downstream-of-register nets show the post-edge value.
-            res = simulate(circuit, netlist, graph, inp, state=reg_state)
+            res = simulate(circuit, netlist, graph, inp,
+                           state_store=dict(reg_state))
         return res
 
     result = SimResult()
@@ -564,26 +597,33 @@ def _row_has_clock_edge(circuit, headers, row) -> bool:
     return False
 
 def _eval_node(comp, idx, in_vals, child_by_index, depth, max_depth):
-    """Return output-pin values for a component, or None if unresolved."""
-    name = comp.element_name
-    rule = _RULES.get(name)
+    """Return output-pin values for a plain (non-subcircuit) component, or None.
+
+    Subcircuits are handled inline by `simulate()` so their nested register
+    next-states can bubble up; this only dispatches the per-component rules.
+    """
+    rule = _RULES.get(comp.element_name)
     if rule is not None:
         return rule(comp, in_vals)
-    if name.endswith(".dig") and depth < max_depth:
-        return _eval_subcircuit(comp, idx, in_vals, child_by_index, depth, max_depth)
     return None
 
 
-def _eval_subcircuit(comp, idx, in_vals, child_by_index, depth, max_depth):
+def _eval_subcircuit(comp, idx, in_vals, child_by_index, depth, max_depth,
+                     state_store, path):
     """Recurse into a resolved subcircuit.
 
     Parent input pins are named for the child's In labels (see
     netlist._subcircuit_pin_specs), so we can feed them straight in and read
     the child's Out labels back out onto the parent's output pins.
+
+    
+    Returns ``(output_values | None, reg_next)`` where ``reg_next`` is the
+    child's path-keyed register next-states (already prefixed with this
+    subcircuit's path) so the caller can latch them on the shared clock edge.
     """
     child = child_by_index.get(idx)
-    if child is None:
-        return None
+    if child is None or depth >= max_depth:
+        return None, {}
     try:
         # Memoize the child's netlist/graph on the circuit object: it never
         # changes, and rebuilding a 200+ component subcircuit on every fixpoint
@@ -596,11 +636,10 @@ def _eval_subcircuit(comp, idx, in_vals, child_by_index, depth, max_depth):
             child._sim_g = build_signal_graph(child, child_nl)
         child_g = child._sim_g
         sub = simulate(
-            child, child_nl, child_g, dict(in_vals),
+            state_store=state_store, path=path + (idx,),
             _depth=depth + 1, _max_depth=max_depth,
         )
     except Exception:
-        return None
-    if not sub.output_values:
-        return None
-    return dict(sub.output_values)
+        return None, {}
+    outs = dict(sub.output_values) if sub.output_values else None
+    return outs, dict(sub.reg_next)
