@@ -152,6 +152,7 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
     # we don't keep a second, independently-drifting width path.
     per_net, _conflicts = infer_net_widths(circuit, netlist)
     nodes = []
+    node_ports: dict[str, dict] = {}   # node id -> {pin_name: endpoint}
     for idx, comp in enumerate(circuit.components):
         family = _family(comp.element_name)
         if family in ("annotation", "tunnel"):
@@ -180,6 +181,7 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
             data["shape_w"] = glyph["w"]
             data["shape_h"] = glyph["h"]
             data["shape_tier"] = glyph["tier"]
+            node_ports[str(idx)] = glyph.get("ports", {})
         nodes.append({"data": data})
 
    # Gates whose inputs carry an inverter bubble: render the bubble as a
@@ -218,30 +220,43 @@ def to_cytoscape(circuit: Circuit, netlist: NetList, graph) -> dict:
                 not_id = f"not-{v}-{sink_pin}"
                 not_node_ids[key] = not_id
                 nodes.append(_synthetic_not_node(not_id, target_comp))
-            edges.append({"data": {
+            se = node_ports.get(str(u), {}).get(driver_pin)
+            d1 = {
                 "id": f"e{edge_id}", "source": str(u), "target": not_id,
                 "net_id": net_id, "driver_pin": driver_pin, "sink_pin": "A",
                 "bits": bits,
-            }})
+            }
+            if se:
+                d1["se"] = se
+            edges.append({"data": d1})
             edge_id += 1
-            edges.append({"data": {
+            te = node_ports.get(str(v), {}).get(sink_pin)
+            d2 = {
                 "id": f"e{edge_id}", "source": not_id, "target": str(v),
                 "net_id": net_id, "driver_pin": "Y", "sink_pin": sink_pin,
                 "bits": bits,
-            }})
+            }
+            if te:
+                d2["te"] = te
+            edges.append({"data": d2})
             edge_id += 1
         else:
-            edges.append({
-                "data": {
-                    "id": f"e{edge_id}",
-                    "source": str(u),
-                    "target": str(v),
-                    "net_id": net_id,
-                    "driver_pin": driver_pin,
-                    "sink_pin": sink_pin,
-                    "bits": bits,
-                },
-            })
+            edata = {
+                "id": f"e{edge_id}",
+                "source": str(u),
+                "target": str(v),
+                "net_id": net_id,
+                "driver_pin": driver_pin,
+                "sink_pin": sink_pin,
+                "bits": bits,
+            }
+            se = node_ports.get(str(u), {}).get(driver_pin)
+            te = node_ports.get(str(v), {}).get(sink_pin)
+            if se:
+                edata["se"] = se
+            if te:
+                edata["te"] = te
+            edges.append({"data": edata})
             edge_id += 1
 
     return {"nodes": nodes, "edges": edges}

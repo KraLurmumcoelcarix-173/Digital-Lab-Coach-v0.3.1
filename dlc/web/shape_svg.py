@@ -451,11 +451,72 @@ def _bitextender_svg(comp, fill) -> dict:
 # Public dispatch
 # --------------------------------------------------------------------------
 
+def _ep(xf: float, yf: float) -> str:
+    """A glyph-local (xf, yf) fraction -> Cytoscape endpoint, relative to the
+    node centre (where -50%..50% spans the node box)."""
+    return f"{(xf - 0.5) * 100:.1f}% {(yf - 0.5) * 100:.1f}%"
+
+
+def port_endpoints(comp: Component, w: int, h: int) -> dict:
+    """Map each pin name to a Cytoscape edge endpoint aligned with the glyph's
+    drawn port stub, so wires meet the ports instead of the bounding box.
+
+    Inputs sit on the left edge, outputs on the right, mux/`sel`-style pins on
+    the bottom; Ground/VDD drive from top/bottom. Positions mirror the
+    _even_ys layout the draw functions use (exact for gates/boxes, within a
+    pixel or two for mux/splitter). Seven-seg keeps the default endpoint."""
+    name = comp.element_name
+    if name == "Seven-Seg":
+        return {}
+    try:
+        pins = get_pin_specs(comp)
+    except Exception:
+        return {}
+    if not pins:
+        return {}
+    if name == "Ground":
+        return {pins[0].name: _ep(0.5, 0.12)}
+    if name == "VDD":
+        return {pins[0].name: _ep(0.5, 0.88)}
+
+    margin = (12.0 / h) if h else 0.2
+
+    def fracs(k):
+        if k <= 1:
+            return [0.5]
+        return [margin + i * (1 - 2 * margin) / (k - 1) for i in range(k)]
+
+    ins = [p for p in pins if p.direction == "in"]
+    outs = [p for p in pins if p.direction == "out"]
+    left = sorted([p for p in ins if p.offset_x <= 0], key=lambda p: p.offset_y)
+    bottom = sorted([p for p in ins if p.offset_x > 0], key=lambda p: p.offset_x)
+    right = sorted(outs, key=lambda p: p.offset_y)
+
+    out: dict[str, str] = {}
+    for p, yf in zip(left, fracs(len(left))):
+        out[p.name] = _ep(0.02, yf)
+    for i, p in enumerate(bottom):
+        xf = 0.5 if len(bottom) == 1 else 0.35 + 0.3 * i / (len(bottom) - 1)
+        out[p.name] = _ep(xf, 0.95)
+    for p, yf in zip(right, fracs(len(right))):
+        out[p.name] = _ep(0.98, yf)
+    return out
+
 def shape_for(comp: Component, family: str) -> dict | None:
-    """Return {svg, w, h, tier} for a component, or None to keep the default
-    round-rectangle. Never raises: any failure falls back to None."""
+    """Return {svg, w, h, tier, ports} for a component, or None to keep the
+    default round-rectangle. Never raises: any failure falls back to None."""
     fill = _FAMILY_FILL.get(family, "#e9ecef")
     name = comp.element_name
+    try:
+        res = _draw_glyph(comp, fill, name)
+    except Exception:
+        return None
+    if res is not None and res.get("tier") == "glyph":
+        res["ports"] = port_endpoints(comp, res["w"], res["h"])
+    return res
+
+
+def _draw_glyph(comp: Component, fill: str, name: str) -> dict | None:
     try:
         if name in _NARY_GATES:
             return _gate_svg(comp, fill)

@@ -79,6 +79,10 @@ const CY_STYLE = [
       "arrow-scale": 0.9,
     },
   },
+    // Anchor an edge to the exact port stub on a glyph node (when graph_export
+  // provided one), so arrows meet the ports instead of the bounding box.
+  { selector: "edge[se]", style: { "source-endpoint": "data(se)" } },
+  { selector: "edge[te]", style: { "target-endpoint": "data(te)" } },
   { selector: "edge.faded", style: { "opacity": 0.1 } },
   {
     selector: "edge.highlight",
