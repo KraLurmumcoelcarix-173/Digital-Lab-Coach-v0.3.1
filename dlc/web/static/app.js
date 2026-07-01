@@ -282,8 +282,38 @@ fileInput.addEventListener("change", async () => {
 clearBtn.addEventListener("click", () => {
   if (loaded.length === 0) return;
   if (!confirm("Clear all uploaded files and return to the dashboard?")) return;
+  playClearWipe();     // decorative right-to-left "garble" wipe back to Layer 1
+  returnToMain();
   resetDashboard();
 });
+
+// Full-screen right-to-left "digital garble" wipe, purely decorative, played
+// when Clear all returns the user to the Layer-1 dashboard.
+function playClearWipe() {
+  const el = document.createElement("div");
+  el.className = "wipe-overlay";
+  const sheet = document.createElement("pre");
+  sheet.className = "wipe-sheet";
+  el.appendChild(sheet);
+  const chars = "01<>/\\|=+*#$%&ABCDEF011001010110111010101001";
+  const garble = () => {
+    const cols = Math.ceil(window.innerWidth / 9);
+    const rows = Math.ceil(window.innerHeight / 16);
+    let s = "";
+    for (let r = 0; r < rows; r++) {
+      let line = "";
+      for (let c = 0; c < cols; c++) line += chars[(Math.random() * chars.length) | 0];
+      s += line + "\n";
+    }
+    sheet.textContent = s;
+  };
+  garble();
+  document.body.appendChild(el);
+  const flick = setInterval(garble, 90);
+  requestAnimationFrame(() => el.classList.add("go"));
+  setTimeout(() => { clearInterval(flick); el.remove(); }, 1500);
+}
+
 
 function resetDashboard() {
   fileObjects = [];

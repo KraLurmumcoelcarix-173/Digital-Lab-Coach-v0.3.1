@@ -557,6 +557,39 @@ main {
 .clock-hud.running { background: #fef3c7; font-weight: 600; }
 .clock-hud.restart { background: #dbeafe; border-color: #2563eb; color: #1e3a8a; font-weight: 600; }
 
+/* Decorative "digital garble" wipe when Clear all returns you to Layer 1. */
+.wipe-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+}
+.wipe-sheet {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  line-height: 16px;
+  letter-spacing: 1px;
+  color: #22c55e;
+  background: #06110a;
+  white-space: pre;
+  overflow: hidden;
+  transform: translateX(100%);
+  text-shadow: 0 0 4px rgba(34, 197, 94, 0.55);
+}
+.wipe-overlay.go .wipe-sheet {
+  animation: wipe-sweep 1.4s cubic-bezier(0.6, 0, 0.3, 1) forwards;
+}
+@keyframes wipe-sweep {
+  0%   { transform: translateX(100%); }   /* off-screen right */
+  40%  { transform: translateX(0); }      /* cover everything */
+  60%  { transform: translateX(0); }      /* hold */
+  100% { transform: translateX(-102%); }  /* sweep off to the left */
+}
+
 /* A test row you can click to light up the signal-flow graph. */
 .tests-results tr.sig-clickable { cursor: pointer; }
 .tests-results tr.sig-clickable:hover td { background: #eef2ff; }

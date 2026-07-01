@@ -39,7 +39,7 @@
           <testData>
             <dataString>A Y
 5 5
-60 60</dataString>
+(-60) (-60)</dataString>
           </testData>
         </entry>
       </elementAttributes>
