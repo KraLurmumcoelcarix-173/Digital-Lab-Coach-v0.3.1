@@ -77,6 +77,47 @@ const CY_STYLE = [
       "background-color": "#fee2e2",
     },
   },
+  // --- signal-flow coloring (applied when a test row is clicked) ---------
+  // 1-bit wires: bright green = 1, dark green = 0 (no number, like Digital).
+  {
+    selector: "edge.sig-hi",
+    style: {
+      "line-color": "#22c55e", "target-arrow-color": "#22c55e", "width": 3,
+      "opacity": 1,
+    },
+  },
+  {
+    selector: "edge.sig-lo",
+    style: {
+      "line-color": "#166534", "target-arrow-color": "#166534", "width": 2,
+      "opacity": 1,
+    },
+  },
+  // multi-bit bus: blue + the hex value shown on the wire.
+  {
+    selector: "edge.sig-bus",
+    style: {
+      "line-color": "#2563eb", "target-arrow-color": "#2563eb", "width": 3,
+      "label": "data(sigLabel)", "font-size": 9, "color": "#1e3a8a",
+      "text-background-color": "#ffffff", "text-background-opacity": 0.9,
+      "text-background-padding": 2, "text-rotation": "autorotate",
+      "opacity": 1,
+    },
+  },
+  // signal-carrying wire the evaluator could not resolve (e.g. clock, or a
+  // register cone with no clock stepped yet): gray, no value.
+  { selector: "edge.sig-none", style: { "line-color": "#cbd5e1", "target-arrow-color": "#cbd5e1", "width": 1 } },
+  // dim everything not touched by the active row while a row is selected.
+  { selector: "edge.sig-dim", style: { "opacity": 0.15 } },
+  { selector: "node.sig-dim", style: { "opacity": 0.35 } },
+  // failed-row output: red ring + expected/found chip in the label.
+  {
+    selector: "node.sig-mismatch",
+    style: {
+      "border-color": "#dc2626", "border-width": 4,
+      "background-color": "#fee2e2", "label": "data(label)",
+    },
+  },
 ];
 
 //DOM 
@@ -994,7 +1035,7 @@ function hideProgress() {
 function renderTestResults(payload) {
   testsResultsEl.classList.remove("empty");
 
-  const html = payload.specs.map((spec) => {
+  const html = payload.specs.map((spec, specIdx) => {
     const headers = spec.headers || [];
     const headerCells =
       `<td class="row-idx">idx</td>` +
@@ -1005,7 +1046,8 @@ function renderTestResults(payload) {
       const idxCell = `<td class="row-idx">${row.index}</td>`;
       if (row.error_message) {
         const span = headers.length + 1;
-        return `<tr class="${escapeHtml(row.status)}">
+      // Clicking the row lights up the signal-flow graph for that vector.
+      return `<tr class="${escapeHtml(row.status)} sig-clickable" data-sig-row="1" data-spec="${specIdx}" data-row="${row.index}" title="Click to show signal flow for this row">
           ${idxCell}
           <td class="row-err" colspan="${span}">${escapeHtml(row.error_message)}</td>
         </tr>`;
@@ -1041,6 +1083,91 @@ function renderTestResults(payload) {
   }).join("");
   testsResultsEl.innerHTML = html;
 }
+
+// --- Signal-flow overlay: click a test row to color wires by their value ----
+
+async function showSignalFlowForRow(specIdx, rowIdx, trEl) {
+  if (!sessionId || !loaded[currentIdx]) return;
+  const filename = loaded[currentIdx].filename;
+
+  document.querySelectorAll("tr.sig-selected")
+    .forEach((t) => t.classList.remove("sig-selected"));
+  if (trEl) trEl.classList.add("sig-selected");
+
+  let sim;
+  try {
+    const res = await fetch("/api/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId, filename,
+        spec_index: specIdx, row_index: rowIdx,
+      }),
+    });
+    if (!res.ok) { console.warn("simulate failed", res.status); return; }
+    sim = await res.json();
+  } catch (err) {
+    console.warn("simulate error", err);
+    return;
+  }
+  if (!sim || sim.ok === false) return;
+  applySignalFlow(sim);
+}
+
+function clearSignalFlow() {
+  if (!cy) return;
+  cy.edges().removeClass("sig-hi sig-lo sig-bus sig-none sig-dim");
+  cy.nodes().removeClass("sig-mismatch sig-dim");
+  cy.batch(() => {
+    cy.edges().forEach((e) => e.data("sigLabel", ""));
+    cy.nodes().forEach((n) => {
+      const base = n.data("baseLabel");
+      if (base != null) n.data("label", base);
+    });
+  });
+}
+
+// Paint every edge by the value its net carries this row: 1-bit -> green
+// (bright 1 / dark 0), multi-bit -> blue + hex on the wire, unresolved ->
+// gray. Failed-row outputs get a red ring + expected/found chip.
+function applySignalFlow(sim) {
+  if (!cy) return;
+  clearSignalFlow();
+  const nv = sim.net_values || {};
+  cy.batch(() => {
+    cy.edges().forEach((e) => {
+      const nid = e.data("net_id");
+      const info = (nid !== null && nid !== undefined) ? nv[String(nid)] : null;
+      if (!info) { e.addClass("sig-none"); return; }
+      const bits = info.bits || 1;
+      if (bits <= 1) {
+        e.addClass(info.value ? "sig-hi" : "sig-lo");
+      } else {
+        e.addClass("sig-bus");
+        e.data("sigLabel", "0x" + (info.hex || "0"));
+      }
+    });
+    (sim.outputs || []).forEach((o) => {
+      if (o.ok !== false) return;
+      cy.nodes().forEach((n) => {
+        if (n.data("element_name") !== "Out") return;
+        if (n.data("comp_label") !== o.label) return;
+        if (n.data("baseLabel") == null) n.data("baseLabel", n.data("label"));
+        n.addClass("sig-mismatch");
+        n.data("label", n.data("baseLabel") + "\n⚠ exp " + o.expected + " / got " + o.found);
+      });
+    });
+  });
+}
+
+testsResultsEl.addEventListener("click", (evt) => {
+  const tr = evt.target.closest("tr[data-sig-row]");
+  if (!tr) return;
+  const specIdx = parseInt(tr.getAttribute("data-spec"), 10);
+  const rowIdx = parseInt(tr.getAttribute("data-row"), 10);
+  if (Number.isNaN(specIdx) || Number.isNaN(rowIdx)) return;
+  showSignalFlowForRow(specIdx, rowIdx, tr);
+});
 
 function renderGeneralResults(payload) {
   testsResultsEl.classList.remove("empty");

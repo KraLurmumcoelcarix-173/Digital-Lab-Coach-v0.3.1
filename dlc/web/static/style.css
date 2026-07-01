@@ -538,6 +538,15 @@ main {
 .tests-results .row-status { width: 60px; }
 .tests-results .row-err { color: #92400e; font-size: 11px; }
 
+/* A test row you can click to light up the signal-flow graph. */
+.tests-results tr.sig-clickable { cursor: pointer; }
+.tests-results tr.sig-clickable:hover td { background: #eef2ff; }
+.tests-results tr.sig-selected td {
+  background: #dbeafe;
+  box-shadow: inset 2px 0 0 #2563eb;
+}
+
+
 .tests-results thead td {
   background: #f8fafc;
   color: var(--muted);

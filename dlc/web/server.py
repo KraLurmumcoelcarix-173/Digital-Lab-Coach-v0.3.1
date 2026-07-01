@@ -50,6 +50,7 @@ from dlc.web.component_kb import library_for_inventory
 from dlc.parser.pin_geometry import inverted_input_names
 
 from dlc.testing.spec import extract_test_specs
+from dlc.sim.simulator import simulate_sequential
 from dlc.web.graph_export import circuit_summary, to_cytoscape
 
 
@@ -74,6 +75,13 @@ class TestsRequest(BaseModel):
 class TestsAllRequest(BaseModel):
     session_id: str
     timeout: float = 60.0
+
+class SimulateRequest(BaseModel):
+    session_id: str
+    filename: str
+    spec_index: int = 0
+    row_index: int = 0
+
 
 
 class ApiKeyRequest(BaseModel):
@@ -691,6 +699,86 @@ def run_tests(req: TestsRequest) -> dict:
         "all_passed": (not any_failed) and (not any_runner_error),
         "specs": spec_payloads,
     }
+
+@app.post("/api/simulate")
+def simulate_row(req: SimulateRequest) -> dict:
+    """Signal-flow values for one clicked test row.
+
+    Deterministically evaluates the circuit as of `row_index` (replaying the
+    testcase for clocked designs) and returns the value carried on every net
+    the evaluator could resolve, plus expected-vs-found for the top-level
+    outputs so a failed row can be shown in red. Purely additive: this never
+    runs Digital and never touches the Layer-1 checkers.
+    """
+    target = _resolve_target(req.session_id, req.filename)
+    try:
+        circuit = parse_dig_file(target["path"])
+        netlist = build_netlist(circuit)
+        graph = build_signal_graph(circuit, netlist)
+    except Exception as exc:
+        return {"ok": False, "warning": f"Could not parse circuit: {exc}",
+                "net_values": {}, "outputs": [], "unresolved_nets": []}
+
+    specs = extract_test_specs(circuit)
+    if not specs or req.spec_index >= len(specs):
+        return {"ok": False, "warning": "No such testcase in this circuit.",
+                "net_values": {}, "outputs": [], "unresolved_nets": []}
+    spec = specs[req.spec_index]
+
+    try:
+        res = simulate_sequential(circuit, netlist, graph, spec, req.row_index)
+    except Exception as exc:
+        return {"ok": False,
+                "warning": f"Evaluator error: {type(exc).__name__}: {exc}",
+                "net_values": {}, "outputs": [], "unresolved_nets": []}
+
+    net_values = {
+        str(nid): {
+            "value": val,
+            "bits": res.net_bits.get(nid, 1),
+            "hex": format(val, "X"),
+        }
+        for nid, val in res.net_values.items()
+    }
+
+    # Expected (from the row's output columns) vs found (evaluated).
+    row = next(
+        (r for r in spec.rows if r.line_index == req.row_index and not r.is_malformed),
+        None,
+    )
+    expected: dict[str, int] = {}
+    if row is not None:
+        from dlc.testing.spec import match_variables_to_io
+        bindings = match_variables_to_io(spec.headers, circuit)
+        for col, header in enumerate(spec.headers):
+            b = bindings.get(header)
+            if b and b.role == "output" and col < len(row.values):
+                tok = row.values[col]
+                if tok.kind == "int" and tok.value is not None:
+                    expected[header] = tok.value
+
+    outputs = []
+    for label, exp in expected.items():
+        found = res.output_values.get(label)
+        outputs.append({
+            "label": label,
+            "expected": exp,
+            "found": found,
+            "ok": (found == exp) if found is not None else None,
+        })
+
+    return {
+        "ok": True,
+        "warning": None,
+        "row_index": req.row_index,
+        "spec_index": req.spec_index,
+        "net_values": net_values,
+        "unresolved_nets": sorted(res.unresolved_nets),
+        "outputs": outputs,
+        "notes": res.notes,
+    }
+
+
 
 _PROVIDERS = ["anthropic", "openai"]
 
