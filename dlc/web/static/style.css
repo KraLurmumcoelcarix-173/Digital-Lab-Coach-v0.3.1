@@ -538,6 +538,24 @@ main {
 .tests-results .row-status { width: 60px; }
 .tests-results .row-err { color: #92400e; font-size: 11px; }
 
+/* Clock-tick heads-up display, floated over the signal-flow graph. */
+.clock-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 30;
+  background: #fff8e1;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #92400e;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  user-select: none;
+}
+.clock-hud.running { background: #fef3c7; font-weight: 600; }
+
 /* A test row you can click to light up the signal-flow graph. */
 .tests-results tr.sig-clickable { cursor: pointer; }
 .tests-results tr.sig-clickable:hover td { background: #eef2ff; }

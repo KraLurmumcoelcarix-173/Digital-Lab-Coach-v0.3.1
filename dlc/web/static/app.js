@@ -155,6 +155,11 @@ const CY_STYLE = [
       "text-background-padding": 3,
     },
   },
+    // the Clock glyph is clickable to tick through rows — flag it while hinting
+  {
+    selector: "node.clock-hint",
+    style: { "border-color": "#f59e0b", "border-width": 3, "border-opacity": 1 },
+  },
 ];
 
 //DOM 
@@ -241,9 +246,11 @@ const testState = {};
 
 //Session state 
 let fileObjects = [];  
-let loaded      = [];  
+let loaded      = [];
 let currentIdx  = 0;
 let cy          = null;
+let sigActive   = null;   // {specIdx, rowIdx} of the row driving the overlay
+let clockTimer  = null;   // set while the clock is ticking through rows
 
 
 fileInput.addEventListener("change", async () => {
@@ -426,6 +433,12 @@ function renderGraph(graph) {
     return;
   }
 
+  // switching circuits ends any active tick / overlay
+  stopClockTick();
+  sigActive = null;
+  hideClockHud();
+
+  
   if (cy) cy.destroy();
 
   cy = cytoscape({
@@ -481,8 +494,10 @@ function renderGraph(graph) {
     evt.target.removeClass("wire-focus");
     hidePopup();
   });
-  cy.on("tap", (evt) => {
-    if (evt.target === cy) clearIssueHighlight();
+  // Click the Clock glyph to tick the signal flow through the rest of the rows.
+  cy.on("tap", "node", (evt) => {
+    if (evt.target.data("element_name") !== "Clock") return;
+    if (clockTimer) stopClockTick(); else startClockTick();
   });
 }
 
@@ -1154,6 +1169,98 @@ async function showSignalFlowForRow(specIdx, rowIdx, trEl) {
   }
   if (!sim || sim.ok === false) return;
   applySignalFlow(sim);
+  sigActive = { specIdx, rowIdx };
+  updateClockHint();
+}
+
+// --- clock tick: step the signal flow through the remaining rows -----------
+
+function circuitHasClock() {
+  return !!(cy && cy.nodes('[element_name = "Clock"]').nonempty());
+}
+
+function ensureClockHud() {
+  let hud = document.getElementById("clock-hud");
+  if (!hud) {
+    hud = document.createElement("div");
+    hud.id = "clock-hud";
+    hud.className = "clock-hud";
+    const box = document.getElementById("cy");
+    if (box && box.parentElement) {
+      if (getComputedStyle(box.parentElement).position === "static") {
+        box.parentElement.style.position = "relative";
+      }
+      box.parentElement.appendChild(hud);
+    }
+    hud.addEventListener("click", () => {
+      if (clockTimer) stopClockTick(); else startClockTick();
+    });
+  }
+  return hud;
+}
+
+function hideClockHud() {
+  const hud = document.getElementById("clock-hud");
+  if (hud) hud.style.display = "none";
+  if (cy) cy.nodes().removeClass("clock-hint");
+}
+
+// Idle hint shown once a row is active on a clocked circuit.
+function updateClockHint() {
+  if (!sigActive || !circuitHasClock()) { hideClockHud(); return; }
+  if (clockTimer) return;               // ticking shows its own text
+  const hud = ensureClockHud();
+  hud.className = "clock-hud";
+  hud.textContent = "⏱ Click the Clock to tick through the rows";
+  hud.style.display = "block";
+  cy.nodes('[element_name = "Clock"]').addClass("clock-hint");
+}
+
+function rowsForSpec(specIdx) {
+  return Array.from(
+    document.querySelectorAll(`tr[data-sig-row][data-spec="${specIdx}"]`),
+  ).map((tr) => parseInt(tr.getAttribute("data-row"), 10))
+    .filter((n) => !Number.isNaN(n));
+}
+
+function stopClockTick() {
+  if (clockTimer) { clearTimeout(clockTimer); clockTimer = null; }
+  updateClockHint();
+}
+
+// From the active row, advance through the rest of the testcase, re-rendering
+// the signal flow for each and counting ticks. Click again (clock or HUD) to stop.
+function startClockTick() {
+  if (!sigActive) return;
+  const specIdx = sigActive.specIdx;
+  const rows = rowsForSpec(specIdx);
+  if (!rows.length) return;
+  let i = Math.max(0, rows.indexOf(sigActive.rowIdx));
+  const hud = ensureClockHud();
+  hud.className = "clock-hud running";
+  if (cy) cy.nodes().removeClass("clock-hint");
+
+  const step = async () => {
+    if (clockTimer === null) return;                 // stopped
+    const rowIdx = rows[i];
+    const tr = document.querySelector(
+      `tr[data-sig-row][data-spec="${specIdx}"][data-row="${rowIdx}"]`);
+    await showSignalFlowForRow(specIdx, rowIdx, tr);
+    if (clockTimer === null) return;                 // stopped mid-await
+    hud.className = "clock-hud running";
+    hud.textContent = `⏱ tick ${i + 1} / ${rows.length}  ·  row ${rowIdx}  (click to stop)`;
+    hud.style.display = "block";
+    if (i + 1 < rows.length) {
+      i += 1;
+      clockTimer = setTimeout(step, 750);
+    } else {
+      clockTimer = null;
+      hud.textContent = `⏱ done — ${rows.length} rows`;
+      setTimeout(() => { if (clockTimer === null) updateClockHint(); }, 1600);
+    }
+  };
+  clockTimer = true;   // mark running before the first (async) step
+  step();
 }
 
 function clearSignalFlow() {
